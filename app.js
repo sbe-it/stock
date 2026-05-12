@@ -200,7 +200,8 @@ document.getElementById('category-form').addEventListener('submit', async (e) =>
     let url = document.getElementById('cat-image-url').value;
 
     if(file) {
-        const path = `${Date.now()}-${file.name}`;
+        const ext = file.name.split('.').pop();
+        const path = `${Date.now()}.${ext}`;
         const { data, error } = await _supabase.storage.from('category-images').upload(path, file);
         if (error) {
             console.error('Upload error:', error);
@@ -265,7 +266,8 @@ document.getElementById('tool-form').addEventListener('submit', async (e) => {
     let url = document.getElementById('tool-image-url').value;
 
     if(file) {
-        const path = `${Date.now()}-${file.name}`;
+        const ext = file.name.split('.').pop();
+        const path = `${Date.now()}.${ext}`;
         const { data, error } = await _supabase.storage.from('tool-images').upload(path, file);
         if (error) {
             console.error('Upload error:', error);
