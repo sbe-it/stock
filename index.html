@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ToolFlow | ระบบแยกส่วนงาน ช่างไฟ-ช่างก่อสร้าง</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Noto+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        .dept-tabs { display: flex; gap: 1rem; margin-bottom: 2rem; border-bottom: 1px solid var(--border); padding-bottom: 1rem; }
+        .dept-tab { padding: 0.75rem 1.5rem; cursor: pointer; border-radius: 0.5rem; transition: 0.3s; font-weight: 700; border: 1px solid transparent; }
+        .dept-tab.active { background: var(--primary); color: white; }
+        .dept-tab:not(.active):hover { background: rgba(255,255,255,0.05); }
+    </style>
+</head>
+<body>
+    <nav>
+        <div class="logo">TOOLFLOW</div>
+        <div class="nav-links" style="display: flex; gap: 0.5rem;">
+            <button class="btn-outline" onclick="switchView('inventory')" id="nav-inventory" style="background: var(--primary);">เบิก-คืน</button>
+            <button class="btn-outline" onclick="switchView('management')" id="nav-mgmt">จัดการข้อมูล</button>
+        </div>
+    </nav>
+
+    <div class="container">
+        <!-- Department Selector -->
+        <div class="dept-tabs">
+            <div class="dept-tab active" id="tab-ช่างไฟ" onclick="switchDept('ช่างไฟ')">💡 แผนกช่างไฟ</div>
+            <div class="dept-tab" id="tab-ช่างก่อสร้าง" onclick="switchDept('ช่างก่อสร้าง')">🏗️ แผนกช่างก่อสร้าง</div>
+        </div>
+
+        <!-- View 1: Inventory -->
+        <div id="view-inventory">
+            <div class="stats-grid">
+                <div class="glass-panel stat-card"><div class="stat-label">เครื่องมือทั้งหมด</div><div class="stat-value" id="stat-total">0</div></div>
+                <div class="glass-panel stat-card"><div class="stat-label">พร้อมใช้งาน</div><div class="stat-value" id="stat-available" style="color: #10b981;">0</div></div>
+            </div>
+
+            <div id="inventory-header" style="margin-bottom: 2rem; display: flex; align-items: center; gap: 1rem;">
+                <h2 class="section-title" id="inventory-title" style="margin-bottom: 0;"><i data-lucide="layers"></i> คลังเครื่องมือ</h2>
+            </div>
+
+            <div id="inventory-content" class="tools-grid"></div>
+
+            <div class="log-section" id="recent-logs-section"></div>
+        </div>
+
+        <!-- View 2: Management -->
+        <div id="view-management" style="display: none;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2 class="section-title" style="margin-bottom: 0;"><i data-lucide="folder"></i> จัดการหมวดหมู่</h2>
+                <button class="btn-outline" onclick="openCategoryModal()" style="font-size: 0.8rem;"><i data-lucide="plus"></i> เพิ่มกลุ่มใหม่</button>
+            </div>
+            <div class="glass-panel log-table-container" style="margin-bottom: 3rem;"><table style="font-size: 0.9rem;"><thead><tr><th>ชื่อกลุ่ม</th><th>ส่วนงาน</th><th style="text-align: right;">จัดการ</th></tr></thead><tbody id="mgmt-cats-body"></tbody></table></div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2 class="section-title" style="margin-bottom: 0;"><i data-lucide="settings"></i> จัดการเครื่องมือ</h2>
+                <button class="btn-primary" onclick="openToolModal()"><i data-lucide="plus"></i> เพิ่มเครื่องมือใหม่</button>
+            </div>
+            <div class="glass-panel log-table-container"><table style="font-size: 0.85rem;"><thead><tr><th>รูป</th><th>รหัส</th><th>ชื่อเครื่องมือ</th><th>ส่วนงาน</th><th>ทั้งหมด</th><th>คงเหลือ</th><th style="text-align: right;">จัดการ</th></tr></thead><tbody id="mgmt-tools-body"></tbody></table></div>
+        </div>
+    </div>
+
+    <!-- Modals -->
+    <!-- 1. Category Modal -->
+    <div class="modal-overlay" id="category-modal">
+        <div class="glass-panel modal-content">
+            <h3 id="cat-modal-title" style="margin-bottom: 1.5rem;">กลุ่มเครื่องมือ</h3>
+            <form id="category-form">
+                <input type="hidden" id="edit-cat-id">
+                <div class="form-group"><label>ชื่อกลุ่ม</label><input type="text" id="cat-name" required></div>
+                <div class="form-group">
+                    <label>สังกัดส่วนงาน</label>
+                    <select id="cat-dept" class="glass-panel" style="width: 100%; padding: 0.75rem; color: white; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 0.5rem;">
+                        <option value="ช่างไฟ">ช่างไฟ</option>
+                        <option value="ช่างก่อสร้าง">ช่างก่อสร้าง</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>รูปภาพหน้าปกกลุ่ม</label>
+                    <input type="file" id="cat-image-file" accept="image/*">
+                    <input type="hidden" id="cat-image-url">
+                </div>
+                <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                    <button type="button" class="btn-outline" style="flex: 1;" onclick="closeCategoryModal()">ยกเลิก</button>
+                    <button type="submit" class="btn-primary" style="flex: 1;">บันทึก</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 2. Tool Modal -->
+    <div class="modal-overlay" id="tool-modal">
+        <div class="glass-panel modal-content">
+            <h3 id="tool-modal-title" style="margin-bottom: 1.5rem;">ข้อมูลเครื่องมือ</h3>
+            <form id="tool-form">
+                <input type="hidden" id="edit-tool-id">
+                <div class="form-group"><label>รหัสเครื่องมือ (ห้ามซ้ำ)</label><input type="text" id="tool-code" placeholder="เช่น DRILL-001" required></div>
+                <div class="form-group"><label>ชื่อเครื่องมือ</label><input type="text" id="tool-name" required></div>
+                <div class="form-group">
+                    <label>สังกัดส่วนงาน</label>
+                    <select id="tool-dept" class="glass-panel" style="width: 100%; padding: 0.75rem; color: white; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 0.5rem;" onchange="updateToolCatList()">
+                        <option value="ช่างไฟ">ช่างไฟ</option>
+                        <option value="ช่างก่อสร้าง">ช่างก่อสร้าง</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>เลือกกลุ่ม/หมวดหมู่</label>
+                    <select id="tool-category-id" class="glass-panel" style="width: 100%; padding: 0.75rem; color: white; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 0.5rem;" required>
+                        <option value="">-- เลือกกลุ่ม --</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>รูปภาพเครื่องมือ</label>
+                    <input type="file" id="tool-image-file" accept="image/*">
+                    <input type="hidden" id="tool-image-url">
+                </div>
+                <div class="form-group" style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                    <div><label>จำนวนทั้งหมด</label><input type="number" id="tool-total" value="1" min="0" required></div>
+                    <div><label>จำนวนคงเหลือ</label><input type="number" id="tool-available" value="1" min="0" required></div>
+                </div>
+                <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                    <button type="button" class="btn-outline" style="flex: 1;" onclick="closeToolModal()">ยกเลิก</button>
+                    <button type="submit" class="btn-primary" style="flex: 1;">บันทึก</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- 3. Borrow/Return Modal -->
+    <div class="modal-overlay" id="action-modal">
+        <div class="glass-panel modal-content">
+            <h3 id="modal-title" style="margin-bottom: 1.5rem;">ทำรายการ</h3>
+            <form id="action-form">
+                <input type="hidden" id="action-tool-id">
+                <input type="hidden" id="action-type">
+                <div class="form-group"><label>ชื่อเครื่องมือ</label><input type="text" id="modal-tool-name" readonly></div>
+                <div class="form-group"><label id="label-user-name">ชื่อผู้เบิก</label><input type="text" id="user-name" required></div>
+                <div class="form-group"><label id="label-receiver-name">ชื่อผู้ให้เบิก</label><input type="text" id="receiver-name" required></div>
+                <div class="form-group"><label>จำนวน</label><input type="number" id="quantity" value="1" min="1" required></div>
+                <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                    <button type="button" class="btn-outline" style="flex: 1;" onclick="closeActionModal()">ยกเลิก</button>
+                    <button type="submit" class="btn-primary" style="flex: 1;" id="submit-btn">ยืนยัน</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="history-modal">
+        <div class="glass-panel modal-content" style="max-width: 500px; max-height: 80vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;"><h3 id="history-modal-title">ประวัติเครื่องมือ</h3><button class="btn-outline" onclick="closeHistoryModal()">ปิด</button></div>
+            <div id="tool-history-list" style="display: flex; flex-direction: column; gap: 0.75rem;"></div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
