@@ -5,6 +5,7 @@ const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 let categories = [];
 let tools = [];
+let sites = [];
 let allLogs = [];
 let currentView = 'inventory';
 let currentDept = 'ช่างไฟ';
@@ -16,6 +17,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function refreshData() {
     await fetchCategories();
+    await fetchSites();
     await fetchTools();
     await fetchLogs();
     updateStats();
@@ -30,14 +32,24 @@ async function fetchCategories() {
     categories = data || [];
 }
 
+async function fetchSites() {
+    const { data } = await _supabase.from('sites').select('*').order('name');
+    sites = data || [];
+}
+
 async function fetchTools() {
-    const { data } = await _supabase.from('tools').select('*, categories(name)').order('name');
+    const { data } = await _supabase.from('tools').select('*, categories(name), sites(name)').order('name');
     tools = data || [];
 }
 
 async function fetchLogs() {
-    const { data } = await _supabase.from('transactions').select('*, tools(name, department)').order('timestamp', { ascending: false }).limit(200);
-    allLogs = data ? data.map(l => ({ ...l, tool_name: l.tools ? l.tools.name : 'Unknown', department: l.tools ? l.tools.department : 'ทั่วไป' })) : [];
+    const { data } = await _supabase.from('transactions').select('*, tools(name, department), sites(name)').order('timestamp', { ascending: false }).limit(200);
+    allLogs = data ? data.map(l => ({ 
+        ...l, 
+        tool_name: l.tools ? l.tools.name : 'Unknown', 
+        department: l.tools ? l.tools.department : 'ทั่วไป',
+        site_name: l.sites ? l.sites.name : '-'
+    })) : [];
 }
 
 function updateStats() {
@@ -96,6 +108,24 @@ function renderInventory() {
             const isOutOfStock = tool.available_stock <= 0;
             const card = document.createElement('div');
             card.className = 'glass-panel tool-card';
+            
+            // Location Badge logic
+            let locationHtml = '';
+            if (tool.sites && tool.current_user_name) {
+                locationHtml = `
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <span class="location-badge"><i data-lucide="map-pin" style="width:10px;"></i> ${tool.sites.name}</span>
+                        <span class="user-badge"><i data-lucide="user" style="width:10px;"></i> ${tool.current_user_name}</span>
+                    </div>
+                `;
+            } else if (tool.available_stock < tool.total_stock && tool.current_user_name) {
+                 locationHtml = `
+                    <div style="display: flex; flex-direction: column; gap: 4px;">
+                        <span class="user-badge"><i data-lucide="user" style="width:10px;"></i> ${tool.current_user_name}</span>
+                    </div>
+                `;
+            }
+
             card.innerHTML = `
                 <div style="position: absolute; top: 10px; right: 10px; z-index: 10;">
                     <button class="btn-outline" style="padding: 4px; border-radius: 50%; width: 32px; height: 32px; background: rgba(0,0,0,0.5);" onclick="event.stopPropagation(); openHistoryModal(${tool.id})">
@@ -106,7 +136,11 @@ function renderInventory() {
                 <div class="tool-info">
                     <div style="font-size: 0.7rem; color: var(--primary); font-weight: 800; margin-bottom: 2px;">${tool.tool_code || 'NO-CODE'}</div>
                     <div class="tool-name">${tool.name}</div>
-                    <div class="tool-meta"><span class="stock-badge ${isOutOfStock ? 'stock-empty' : 'stock-available'}">${isOutOfStock ? 'หมด' : `คงเหลือ ${tool.available_stock}`}</span><span style="color: var(--text-muted)">/ ${tool.total_stock}</span></div>
+                    <div class="tool-meta">
+                        <span class="stock-badge ${isOutOfStock ? 'stock-empty' : 'stock-available'}">${isOutOfStock ? 'เบิกเต็มจำนวน' : `คงเหลือ ${tool.available_stock}`}</span>
+                        <span style="color: var(--text-muted)">/ ${tool.total_stock}</span>
+                    </div>
+                    ${locationHtml}
                 </div>
                 <div class="tool-actions">
                     <button class="btn-primary" onclick="openActionModal(${tool.id}, 'BORROW')" ${isOutOfStock ? 'disabled' : ''}>เบิก</button>
@@ -147,8 +181,8 @@ function renderLogs() {
             <div id="log-content-${id}" style="display: none; padding: 1rem 0;">
                 <div class="log-table-container">
                     <table style="font-size: 0.8rem;">
-                        <thead><tr><th>วันเวลา</th><th>ผู้เบิก/คืน</th><th>ผู้รับ</th><th>ประเภท</th><th>จำนวน</th></tr></thead>
-                        <tbody>${group.items.map(i => `<tr><td>${new Date(i.timestamp).toLocaleString()}</td><td>${i.user_name}</td><td>${i.receiver_name||'-'}</td><td><span class="${i.type==='BORROW'?'type-borrow':'type-return'}">${i.type==='BORROW'?'เบิก':'คืน'}</span></td><td>${i.quantity}</td></tr>`).join('')}</tbody>
+                        <thead><tr><th>วันเวลา</th><th>ผู้เบิก/คืน</th><th>ไซงาน</th><th>ผู้รับ</th><th>ประเภท</th><th>จำนวน</th></tr></thead>
+                        <tbody>${group.items.map(i => `<tr><td>${new Date(i.timestamp).toLocaleString()}</td><td>${i.user_name}</td><td>${i.site_name}</td><td>${i.receiver_name||'-'}</td><td><span class="${i.type==='BORROW'?'type-borrow':'type-return'}">${i.type==='BORROW'?'เบิก':'คืน'}</span></td><td>${i.quantity}</td></tr>`).join('')}</tbody>
                     </table>
                 </div>
             </div>
@@ -159,15 +193,39 @@ function renderLogs() {
 }
 
 function renderMgmtView() {
+    // Render Sites
+    const siteBody = document.getElementById('mgmt-sites-body');
+    siteBody.innerHTML = '';
+    sites.forEach(site => {
+        siteBody.innerHTML += `<tr><td><b>${site.name}</b></td><td style="text-align:right;"><button class="btn-outline" style="padding:4px;" onclick="openSiteModal(${site.id})"><i data-lucide="edit-2" style="width:14px;"></i></button> <button class="btn-outline" style="padding:4px;color:var(--danger);" onclick="deleteSite(${site.id})"><i data-lucide="trash" style="width:14px;"></i></button></td></tr>`;
+    });
+
+    // Render Categories
     const catBody = document.getElementById('mgmt-cats-body');
     catBody.innerHTML = '';
     categories.forEach(cat => {
         catBody.innerHTML += `<tr><td><b>${cat.name}</b></td><td><span class="stock-badge stock-available">${cat.department}</span></td><td style="text-align:right;"><button class="btn-outline" style="padding:4px;" onclick="openCategoryModal(${cat.id})"><i data-lucide="edit-2" style="width:14px;"></i></button> <button class="btn-outline" style="padding:4px;color:var(--danger);" onclick="deleteCategory(${cat.id})"><i data-lucide="trash" style="width:14px;"></i></button></td></tr>`;
     });
+
+    // Render Tools
     const toolBody = document.getElementById('mgmt-tools-body');
     toolBody.innerHTML = '';
     tools.forEach(tool => {
-        toolBody.innerHTML += `<tr><td><img src="${tool.image_url}" style="width:32px;height:32px;border-radius:4px;"></td><td style="font-family:monospace;font-weight:700;">${tool.tool_code || '-'}</td><td style="font-weight:600;">${tool.name}</td><td><span class="stock-badge stock-available">${tool.department}</span></td><td>${tool.total_stock}</td><td>${tool.available_stock}</td><td style="text-align:right;"><button class="btn-outline" style="padding:4px;" onclick="openHistoryModal(${tool.id})"><i data-lucide="clock" style="width:14px;"></i></button> <button class="btn-outline" style="padding:4px;" onclick="openToolModal(${tool.id})"><i data-lucide="edit-2" style="width:14px;"></i></button> <button class="btn-outline" style="padding:4px;color:var(--danger);" onclick="deleteTool(${tool.id})"><i data-lucide="trash" style="width:14px;"></i></button></td></tr>`;
+        const locationStr = tool.sites ? `${tool.sites.name} (${tool.current_user_name})` : (tool.current_user_name ? tool.current_user_name : '-');
+        toolBody.innerHTML += `<tr>
+            <td><img src="${tool.image_url}" style="width:32px;height:32px;border-radius:4px;"></td>
+            <td style="font-family:monospace;font-weight:700;">${tool.tool_code || '-'}</td>
+            <td style="font-weight:600;">${tool.name}</td>
+            <td><span class="stock-badge stock-available">${tool.department}</span></td>
+            <td>${tool.total_stock}</td>
+            <td>${tool.available_stock}</td>
+            <td style="font-size:0.75rem; color:var(--text-muted);">${locationStr}</td>
+            <td style="text-align:right;">
+                <button class="btn-outline" style="padding:4px;" onclick="openHistoryModal(${tool.id})"><i data-lucide="clock" style="width:14px;"></i></button> 
+                <button class="btn-outline" style="padding:4px;" onclick="openToolModal(${tool.id})"><i data-lucide="edit-2" style="width:14px;"></i></button> 
+                <button class="btn-outline" style="padding:4px;color:var(--danger);" onclick="deleteTool(${tool.id})"><i data-lucide="trash" style="width:14px;"></i></button>
+            </td>
+        </tr>`;
     });
     if (window.lucide) lucide.createIcons();
 }
@@ -180,7 +238,28 @@ window.toggleElement = (elId, chevId) => {
     if(chev) chev.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
 }
 
-// MODALS logic (Remains same but with Department support)
+// SITE MODAL logic
+window.openSiteModal = (id = null) => {
+    document.getElementById('site-form').reset();
+    document.getElementById('edit-site-id').value = id || '';
+    if(id) {
+        const site = sites.find(s => s.id == id);
+        document.getElementById('site-name').value = site.name;
+    }
+    document.getElementById('site-modal').style.display = 'flex';
+}
+window.closeSiteModal = () => document.getElementById('site-modal').style.display = 'none';
+document.getElementById('site-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('edit-site-id').value;
+    const name = document.getElementById('site-name').value;
+    if(id) await _supabase.from('sites').update({ name }).eq('id', id);
+    else await _supabase.from('sites').insert([{ name }]);
+    await refreshData(); closeSiteModal();
+});
+window.deleteSite = async (id) => { if(confirm('ลบไซงาน?')) { await _supabase.from('sites').delete().eq('id', id); await refreshData(); } }
+
+// CATEGORY MODAL logic
 window.openCategoryModal = (id=null) => {
     document.getElementById('category-form').reset();
     document.getElementById('edit-cat-id').value = id || '';
@@ -222,6 +301,7 @@ document.getElementById('category-form').addEventListener('submit', async (e) =>
     await refreshData(); closeCategoryModal();
 });
 
+// TOOL MODAL logic
 window.openToolModal = (id=null) => {
     document.getElementById('tool-form').reset();
     document.getElementById('edit-tool-id').value = id || '';
@@ -242,7 +322,6 @@ window.updateToolCatList = () => {
     const sel = document.getElementById('tool-category-id');
     sel.innerHTML = '<option value="">-- เลือกกลุ่ม --</option>';
     categories.filter(c => c.department === dept).forEach(c => sel.innerHTML += `<option value="${c.id}">${c.name}</option>`);
-    // Preserve selected category if editing
     const id = document.getElementById('edit-tool-id').value;
     if(id) {
         const t = tools.find(x => x.id == id);
@@ -255,7 +334,6 @@ document.getElementById('tool-form').addEventListener('submit', async (e) => {
     const id = document.getElementById('edit-tool-id').value;
     const toolCode = document.getElementById('tool-code').value.trim();
     
-    // Check for duplicate tool code
     const isDuplicate = tools.some(t => t.tool_code === toolCode && t.id != id);
     if (isDuplicate) {
         alert('❌ รหัสเครื่องมือนี้มีอยู่ในระบบแล้ว กรุณาใช้รหัสอื่น');
@@ -300,6 +378,18 @@ window.openActionModal = (id, type) => {
     document.getElementById('modal-tool-name').value = tool.name;
     document.getElementById('label-user-name').textContent = type === 'BORROW' ? 'ชื่อผู้เบิก' : 'ชื่อผู้คืน';
     document.getElementById('label-receiver-name').textContent = type === 'BORROW' ? 'ชื่อผู้ให้เบิก' : 'ชื่อผู้รับคืน';
+    
+    // Site selection
+    const siteSel = document.getElementById('action-site-id');
+    const siteGroup = document.getElementById('site-selection-group');
+    if (type === 'BORROW') {
+        siteGroup.style.display = 'block';
+        siteSel.innerHTML = '<option value="">-- เลือกไซงาน --</option>';
+        sites.forEach(s => siteSel.innerHTML += `<option value="${s.id}">${s.name}</option>`);
+    } else {
+        siteGroup.style.display = 'none';
+    }
+
     document.getElementById('action-modal').style.display = 'flex';
 }
 window.closeActionModal = () => document.getElementById('action-modal').style.display = 'none';
@@ -307,21 +397,54 @@ document.getElementById('action-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const id = document.getElementById('action-tool-id').value;
     const type = document.getElementById('action-type').value;
+    const siteId = document.getElementById('action-site-id').value || null;
+    const userName = document.getElementById('user-name').value;
     const tool = tools.find(t => t.id == id);
     const qty = parseInt(document.getElementById('quantity').value);
+    
     let newStock = type === 'BORROW' ? tool.available_stock - qty : tool.available_stock + qty;
     if (newStock < 0 || newStock > tool.total_stock) return alert('จำนวนไม่ถูกต้อง');
-    await _supabase.from('tools').update({ available_stock: newStock }).eq('id', id);
-    await _supabase.from('transactions').insert([{ tool_id: id, user_name: document.getElementById('user-name').value, receiver_name: document.getElementById('receiver-name').value, type: type, quantity: qty }]);
+    
+    // Update Tool Status
+    const toolUpdates = { available_stock: newStock };
+    if (type === 'BORROW') {
+        toolUpdates.current_site_id = siteId;
+        toolUpdates.current_user_name = userName;
+    } else {
+        // If everything is returned, clear location
+        if (newStock === tool.total_stock) {
+            toolUpdates.current_site_id = null;
+            toolUpdates.current_user_name = null;
+        }
+    }
+
+    await _supabase.from('tools').update(toolUpdates).eq('id', id);
+    await _supabase.from('transactions').insert([{ 
+        tool_id: id, 
+        site_id: siteId,
+        user_name: userName, 
+        receiver_name: document.getElementById('receiver-name').value, 
+        type: type, 
+        quantity: qty 
+    }]);
+    
     await refreshData(); closeActionModal();
 });
+
 window.openHistoryModal = (id) => {
     const t = tools.find(x => x.id == id);
     document.getElementById('history-modal-title').textContent = `ประวัติ: ${t.name}`;
     const list = document.getElementById('tool-history-list');
     list.innerHTML = '';
     allLogs.filter(l => l.tool_id == id).forEach(log => {
-        list.innerHTML += `<div class="glass-panel" style="padding:0.75rem; font-size:0.8rem; margin-bottom:0.5rem;"><div style="display:flex;justify-content:space-between;"><b>${log.type==='BORROW'?'เบิก':'คืน'} ${log.quantity}</b><small style="color:var(--text-muted)">${new Date(log.timestamp).toLocaleString()}</small></div><div>${log.user_name} / ${log.receiver_name||'-'}</div></div>`;
+        list.innerHTML += `<div class="glass-panel" style="padding:0.75rem; font-size:0.8rem; margin-bottom:0.5rem;">
+            <div style="display:flex;justify-content:space-between;">
+                <b>${log.type==='BORROW'?'เบิก':'คืน'} ${log.quantity}</b>
+                <small style="color:var(--text-muted)">${new Date(log.timestamp).toLocaleString()}</small>
+            </div>
+            <div>${log.user_name} / ${log.receiver_name||'-'}</div>
+            <div style="color:var(--primary); font-size:0.7rem; font-weight:700;">${log.site_name !== '-' ? `📍 ${log.site_name}` : ''}</div>
+        </div>`;
     });
     document.getElementById('history-modal').style.display = 'flex';
 }

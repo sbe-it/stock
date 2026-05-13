@@ -51,6 +51,13 @@
 
         <!-- View 2: Management -->
         <div id="view-management" style="display: none;">
+            <!-- Sites Management -->
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+                <h2 class="section-title" style="margin-bottom: 0;"><i data-lucide="map-pin"></i> จัดการไซงาน</h2>
+                <button class="btn-outline" onclick="openSiteModal()" style="font-size: 0.8rem;"><i data-lucide="plus"></i> เพิ่มไซงานใหม่</button>
+            </div>
+            <div class="glass-panel log-table-container" style="margin-bottom: 3rem;"><table style="font-size: 0.9rem;"><thead><tr><th>ชื่อไซงาน</th><th style="text-align: right;">จัดการ</th></tr></thead><tbody id="mgmt-sites-body"></tbody></table></div>
+
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
                 <h2 class="section-title" style="margin-bottom: 0;"><i data-lucide="folder"></i> จัดการหมวดหมู่</h2>
                 <button class="btn-outline" onclick="openCategoryModal()" style="font-size: 0.8rem;"><i data-lucide="plus"></i> เพิ่มกลุ่มใหม่</button>
@@ -61,11 +68,26 @@
                 <h2 class="section-title" style="margin-bottom: 0;"><i data-lucide="settings"></i> จัดการเครื่องมือ</h2>
                 <button class="btn-primary" onclick="openToolModal()"><i data-lucide="plus"></i> เพิ่มเครื่องมือใหม่</button>
             </div>
-            <div class="glass-panel log-table-container"><table style="font-size: 0.85rem;"><thead><tr><th>รูป</th><th>รหัส</th><th>ชื่อเครื่องมือ</th><th>ส่วนงาน</th><th>ทั้งหมด</th><th>คงเหลือ</th><th style="text-align: right;">จัดการ</th></tr></thead><tbody id="mgmt-tools-body"></tbody></table></div>
+            <div class="glass-panel log-table-container"><table style="font-size: 0.85rem;"><thead><tr><th>รูป</th><th>รหัส</th><th>ชื่อเครื่องมือ</th><th>ส่วนงาน</th><th>ทั้งหมด</th><th>คงเหลือ</th><th>สถานที่ล่าสุด</th><th style="text-align: right;">จัดการ</th></tr></thead><tbody id="mgmt-tools-body"></tbody></table></div>
         </div>
     </div>
 
     <!-- Modals -->
+    <!-- 0. Site Modal -->
+    <div class="modal-overlay" id="site-modal">
+        <div class="glass-panel modal-content">
+            <h3 id="site-modal-title" style="margin-bottom: 1.5rem;">ข้อมูลไซงาน</h3>
+            <form id="site-form">
+                <input type="hidden" id="edit-site-id">
+                <div class="form-group"><label>ชื่อไซงาน</label><input type="text" id="site-name" required></div>
+                <div style="display: flex; gap: 1rem; margin-top: 2rem;">
+                    <button type="button" class="btn-outline" style="flex: 1;" onclick="closeSiteModal()">ยกเลิก</button>
+                    <button type="submit" class="btn-primary" style="flex: 1;">บันทึก</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- 1. Category Modal -->
     <div class="modal-overlay" id="category-modal">
         <div class="glass-panel modal-content">
@@ -75,7 +97,7 @@
                 <div class="form-group"><label>ชื่อกลุ่ม</label><input type="text" id="cat-name" required></div>
                 <div class="form-group">
                     <label>สังกัดส่วนงาน</label>
-                    <select id="cat-dept" class="glass-panel" style="width: 100%; padding: 0.75rem; color: white; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 0.5rem;">
+                    <select id="cat-dept" class="glass-panel">
                         <option value="ช่างไฟ">ช่างไฟ</option>
                         <option value="ช่างก่อสร้าง">ช่างก่อสร้าง</option>
                     </select>
@@ -103,14 +125,14 @@
                 <div class="form-group"><label>ชื่อเครื่องมือ</label><input type="text" id="tool-name" required></div>
                 <div class="form-group">
                     <label>สังกัดส่วนงาน</label>
-                    <select id="tool-dept" class="glass-panel" style="width: 100%; padding: 0.75rem; color: white; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 0.5rem;" onchange="updateToolCatList()">
+                    <select id="tool-dept" class="glass-panel" onchange="updateToolCatList()">
                         <option value="ช่างไฟ">ช่างไฟ</option>
                         <option value="ช่างก่อสร้าง">ช่างก่อสร้าง</option>
                     </select>
                 </div>
                 <div class="form-group">
                     <label>เลือกกลุ่ม/หมวดหมู่</label>
-                    <select id="tool-category-id" class="glass-panel" style="width: 100%; padding: 0.75rem; color: white; background: rgba(255,255,255,0.05); border: 1px solid var(--border); border-radius: 0.5rem;" required>
+                    <select id="tool-category-id" class="glass-panel" required>
                         <option value="">-- เลือกกลุ่ม --</option>
                     </select>
                 </div>
@@ -139,6 +161,12 @@
                 <input type="hidden" id="action-tool-id">
                 <input type="hidden" id="action-type">
                 <div class="form-group"><label>ชื่อเครื่องมือ</label><input type="text" id="modal-tool-name" readonly></div>
+                <div class="form-group" id="site-selection-group">
+                    <label>เลือกไซงาน</label>
+                    <select id="action-site-id" class="glass-panel">
+                        <option value="">-- เลือกไซงาน --</option>
+                    </select>
+                </div>
                 <div class="form-group"><label id="label-user-name">ชื่อผู้เบิก</label><input type="text" id="user-name" required></div>
                 <div class="form-group"><label id="label-receiver-name">ชื่อผู้ให้เบิก</label><input type="text" id="receiver-name" required></div>
                 <div class="form-group"><label>จำนวน</label><input type="number" id="quantity" value="1" min="1" required></div>
