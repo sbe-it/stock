@@ -11,39 +11,60 @@ let currentView = 'inventory';
 let currentDept = 'ช่างไฟ';
 
 document.addEventListener('DOMContentLoaded', async () => {
+    console.log('App initialized. Fetching initial data...');
     await refreshData();
     if (window.lucide) lucide.createIcons();
 });
 
 async function refreshData() {
-    await fetchCategories();
-    await fetchSites();
-    await fetchTools();
-    await fetchLogs();
-    updateStats();
-    if (currentView === 'inventory') renderInventory();
-    else renderMgmtView();
-    renderLogs();
-    if (window.lucide) lucide.createIcons();
+    try {
+        await Promise.all([
+            fetchCategories(),
+            fetchSites(),
+            fetchTools(),
+            fetchLogs()
+        ]);
+        
+        updateStats();
+        if (currentView === 'inventory') renderInventory();
+        else renderMgmtView();
+        renderLogs();
+        if (window.lucide) lucide.createIcons();
+        console.log('Data refreshed successfully');
+    } catch (err) {
+        console.error('Error refreshing data:', err);
+    }
 }
 
 async function fetchCategories() {
-    const { data } = await _supabase.from('categories').select('*').order('name');
+    const { data, error } = await _supabase.from('categories').select('*').order('name');
+    if (error) console.error('Fetch Categories Error:', error);
     categories = data || [];
 }
 
 async function fetchSites() {
-    const { data } = await _supabase.from('sites').select('*').order('name');
+    const { data, error } = await _supabase.from('sites').select('*').order('name');
+    if (error) console.error('Fetch Sites Error:', error);
     sites = data || [];
 }
 
 async function fetchTools() {
-    const { data } = await _supabase.from('tools').select('*, categories(name), sites(name)').order('name');
-    tools = data || [];
+    // Try to fetch with sites join
+    const { data, error } = await _supabase.from('tools').select('*, categories(name), sites(name)').order('name');
+    if (error) {
+        console.warn('Fetch Tools with Sites Join failed, falling back to simple fetch:', error);
+        // Fallback if join fails (e.g. schema not synced yet)
+        const { data: simpleData, error: simpleError } = await _supabase.from('tools').select('*, categories(name)').order('name');
+        if (simpleError) console.error('Fetch Tools Simple Error:', simpleError);
+        tools = simpleData || [];
+    } else {
+        tools = data || [];
+    }
 }
 
 async function fetchLogs() {
-    const { data } = await _supabase.from('transactions').select('*, tools(name, department), sites(name)').order('timestamp', { ascending: false }).limit(200);
+    const { data, error } = await _supabase.from('transactions').select('*, tools(name, department), sites(name)').order('timestamp', { ascending: false }).limit(200);
+    if (error) console.error('Fetch Logs Error:', error);
     allLogs = data ? data.map(l => ({ 
         ...l, 
         tool_name: l.tools ? l.tools.name : 'Unknown', 
@@ -81,7 +102,9 @@ window.switchView = function(view) {
 function renderInventory() {
     const container = document.getElementById('inventory-content');
     container.innerHTML = '';
+    
     const filteredCats = categories.filter(c => c.department === currentDept);
+    console.log(`Rendering Inventory for ${currentDept}. Found ${filteredCats.length} categories.`);
     
     if (filteredCats.length === 0) {
         container.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 2rem;">ไม่พบกลุ่มเครื่องมือในส่วนงานนี้</div>';
@@ -90,6 +113,8 @@ function renderInventory() {
 
     filteredCats.forEach(cat => {
         const catTools = tools.filter(t => t.category_id == cat.id);
+        if (catTools.length === 0) return; // Skip empty categories in inventory
+
         const groupWrapper = document.createElement('div');
         groupWrapper.className = 'category-group';
         groupWrapper.style.gridColumn = '1/-1';
@@ -118,7 +143,7 @@ function renderInventory() {
                         <span class="user-badge"><i data-lucide="user" style="width:10px;"></i> ${tool.current_user_name}</span>
                     </div>
                 `;
-            } else if (tool.available_stock < tool.total_stock && tool.current_user_name) {
+            } else if (tool.current_user_name) {
                  locationHtml = `
                     <div style="display: flex; flex-direction: column; gap: 4px;">
                         <span class="user-badge"><i data-lucide="user" style="width:10px;"></i> ${tool.current_user_name}</span>
@@ -325,7 +350,7 @@ window.updateToolCatList = () => {
     const id = document.getElementById('edit-tool-id').value;
     if(id) {
         const t = tools.find(x => x.id == id);
-        if(t.department === dept) sel.value = t.category_id || '';
+        if(t && t.department === dept) sel.value = t.category_id || '';
     }
 }
 window.closeToolModal = () => document.getElementById('tool-modal').style.display = 'none';
