@@ -47,11 +47,12 @@ function render() {
 }
 
 // ===== VIEW SWITCHING =====
+const viewNavMap = {inventory:'nav-inventory', sites:'nav-sites', management:'nav-mgmt'};
 window.switchView = v => {
     currentView=v;
     ['inventory','sites','management'].forEach(id=>{
         document.getElementById('view-'+id).style.display=id===v?'block':'none';
-        document.getElementById('nav-'+id).classList.toggle('active',id===v);
+        document.getElementById(viewNavMap[id]).classList.toggle('active',id===v);
     });
     render();
 };
