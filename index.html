@@ -185,6 +185,14 @@
         </div>
     </div>
 
+    <!-- Location Summary Modal -->
+    <div class="modal-overlay" id="location-modal">
+        <div class="glass-panel modal-content" style="max-width: 500px; max-height: 80vh; overflow-y: auto;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;"><h3 id="location-modal-title">📍 สรุปสถานที่</h3><button class="btn-outline" onclick="closeLocationModal()">ปิด</button></div>
+            <div id="tool-location-list" style="display: flex; flex-direction: column; gap: 0.75rem;"></div>
+        </div>
+    </div>
+
     <script src="app.js"></script>
 </body>
 </html>
