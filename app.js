@@ -11,7 +11,7 @@ document.addEventListener('DOMContentLoaded', async () => { await refreshData();
 async function refreshData() {
     await Promise.all([fetchCategories(), fetchSites(), fetchTools(), fetchLogs()]);
     updateStats();
-    if (currentView === 'inventory') renderInventory(); else renderMgmtView();
+    if (currentView === 'inventory') { renderInventory(); renderSiteSummary(); } else renderMgmtView();
     renderLogs();
     if (window.lucide) lucide.createIcons();
 }
@@ -199,9 +199,14 @@ window.openActionModal = (id, type) => {
     document.getElementById('label-user-name').textContent = type === 'BORROW' ? 'ชื่อผู้เบิก' : 'ชื่อผู้คืน';
     document.getElementById('label-receiver-name').textContent = type === 'BORROW' ? 'ชื่อผู้ให้เบิก' : 'ชื่อผู้รับคืน';
     const siteSel = document.getElementById('action-site-id'), siteGroup = document.getElementById('site-selection-group');
-    siteGroup.style.display = 'block';
-    siteSel.innerHTML = '<option value="">-- เลือกไซงาน --</option>';
-    sites.forEach(s => siteSel.innerHTML += `<option value="${s.id}">${s.name}</option>`);
+    if (type === 'BORROW') {
+        siteGroup.style.display = 'block';
+        siteSel.innerHTML = '<option value="">-- เลือกไซงาน --</option>';
+        sites.forEach(s => siteSel.innerHTML += `<option value="${s.id}">${s.name}</option>`);
+    } else {
+        siteGroup.style.display = 'none';
+        siteSel.value = '';
+    }
     document.getElementById('action-modal').style.display = 'flex';
 }
 window.closeActionModal = () => document.getElementById('action-modal').style.display = 'none';
@@ -230,3 +235,38 @@ window.openHistoryModal = (id) => {
 window.closeHistoryModal = () => document.getElementById('history-modal').style.display = 'none';
 window.deleteCategory = async (id) => { if(confirm('ลบกลุ่ม?')) { await _supabase.from('categories').delete().eq('id', id); await refreshData(); } }
 window.deleteTool = async (id) => { if(confirm('ลบเครื่องมือ?')) { await _supabase.from('tools').delete().eq('id', id); await refreshData(); } }
+
+// SITE SUMMARY - แสดงแถบไซงาน กดแล้วเห็นว่าไซนี้มีเครื่องมืออะไรอยู่
+function renderSiteSummary() {
+    const section = document.getElementById('site-summary-section');
+    section.innerHTML = '<h2 class="section-title"><i data-lucide="map-pin"></i> สรุปเครื่องมือตามไซงาน</h2>';
+    if (sites.length === 0) { section.innerHTML += '<div class="glass-panel" style="padding:2rem;text-align:center;color:var(--text-muted);">ยังไม่มีไซงาน</div>'; return; }
+    const filteredTools = tools.filter(t => t.department === currentDept);
+    sites.forEach(site => {
+        // หาเครื่องมือที่อยู่ไซนี้
+        const toolsAtSite = [];
+        filteredTools.forEach(tool => {
+            const locs = getToolLocationSummary(tool.id);
+            const atSite = locs.find(l => l.name === site.name);
+            if (atSite) toolsAtSite.push({ tool, qty: atSite.qty, users: atSite.users });
+        });
+        const totalAtSite = toolsAtSite.reduce((a, t) => a + t.qty, 0);
+        const w = document.createElement('div');
+        w.style.marginBottom = '0.5rem';
+        let tableRows = '';
+        if (toolsAtSite.length > 0) {
+            tableRows = toolsAtSite.map(t => `<tr><td style="font-family:monospace;font-weight:700;font-size:0.75rem;">${t.tool.tool_code||'-'}</td><td style="font-weight:600;">${t.tool.name}</td><td>${t.qty}</td><td style="color:var(--text-muted);">${t.users.join(', ')}</td></tr>`).join('');
+        } else {
+            tableRows = '<tr><td colspan="4" style="text-align:center;color:var(--text-muted);">ไม่มีเครื่องมือที่ไซนี้</td></tr>';
+        }
+        w.innerHTML = `<div class="glass-panel" style="padding:0.75rem 1.25rem;cursor:pointer;display:flex;justify-content:space-between;align-items:center;border-left:4px solid ${totalAtSite > 0 ? '#f59e0b' : 'var(--success)'};" onclick="toggleElement('site-detail-${site.id}','chev-site-${site.id}')">
+            <span style="font-weight:700;">📍 ${site.name} <span style="font-size:0.8rem;color:${totalAtSite > 0 ? '#f59e0b' : 'var(--success)'}">(${totalAtSite > 0 ? totalAtSite + ' ชิ้น' : 'ว่าง'})</span></span>
+            <i data-lucide="chevron-down" id="chev-site-${site.id}" style="width:16px;"></i>
+        </div>
+        <div id="site-detail-${site.id}" style="display:none;padding:0.5rem 0;">
+            <div class="log-table-container glass-panel"><table style="font-size:0.8rem;"><thead><tr><th>รหัส</th><th>ชื่อเครื่องมือ</th><th>จำนวน</th><th>ผู้เบิก</th></tr></thead><tbody>${tableRows}</tbody></table></div>
+        </div>`;
+        section.appendChild(w);
+    });
+    if (window.lucide) lucide.createIcons();
+}
