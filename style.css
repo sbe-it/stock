@@ -94,7 +94,27 @@ input, .select-input { width:100%; background:rgba(255,255,255,0.05); border:1px
 .type-borrow { color:var(--warning); } .type-return { color:var(--success); }
 
 @media (max-width:768px) {
-    nav { padding:0.75rem; flex-wrap:wrap; gap:0.5rem; } .nav-links { width:100%; justify-content:center; }
-    .container { padding:1rem 0.5rem; } .stats-grid { grid-template-columns:repeat(3,1fr); gap:0.5rem; }
-    .tools-grid { grid-template-columns:1fr; } .dept-tabs { flex-wrap:wrap; }
+    nav { padding: 0.75rem; flex-direction: column; gap: 0.75rem; }
+    .logo { width: 100%; justify-content: center; }
+    .logo-img { height: 32px; padding: 2px 6px; }
+    .logo span { font-size: 1.15rem; }
+    .logo-divider { height: 18px; }
+    .nav-links { width: 100%; display: flex; gap: 0.25rem; }
+    .nav-btn { flex: 1; text-align: center; padding: 0.6rem 0.25rem; font-size: 0.8rem; white-space: nowrap; }
+    
+    .container { padding: 1rem 0.5rem; }
+    
+    .dept-tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; }
+    .dept-tab { flex: 1; text-align: center; padding: 0.6rem 0.25rem; font-size: 0.85rem; }
+    
+    .stats-grid { grid-template-columns: repeat(3, 1fr); gap: 0.4rem; margin-bottom: 1.25rem; }
+    .stat-card { padding: 0.75rem 0.25rem; }
+    .stat-value { font-size: 1.35rem; }
+    .stat-label { font-size: 0.65rem; }
+    
+    .tools-grid { grid-template-columns: 1fr; gap: 0.75rem; }
+    
+    th, td { padding: 0.5rem 0.4rem; font-size: 0.78rem; }
+    
+    input, .select-input, button { min-height: 40px; }
 }
