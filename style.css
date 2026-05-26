@@ -96,9 +96,9 @@ input, .select-input { width:100%; background:rgba(255,255,255,0.05); border:1px
 @media (max-width:768px) {
     nav { padding: 0.75rem; flex-direction: column; gap: 0.75rem; }
     .logo { width: 100%; justify-content: center; }
-    .logo-img { height: 32px; padding: 2px 6px; }
-    .logo span { font-size: 1.15rem; }
-    .logo-divider { height: 18px; }
+    .logo-img { height: 38px; padding: 3px 8px; }
+    .logo span { display: none; }
+    .logo-divider { display: none; }
     .nav-links { width: 100%; display: flex; gap: 0.25rem; }
     .nav-btn { flex: 1; text-align: center; padding: 0.6rem 0.25rem; font-size: 0.8rem; white-space: nowrap; }
     
