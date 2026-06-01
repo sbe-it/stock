@@ -82,6 +82,10 @@
             <!-- จัดการเครื่องมือ -->
             <div class="mgmt-header"><h2 class="section-title">🔧 จัดการเครื่องมือ</h2><button class="btn-primary btn-sm" onclick="openToolModal()">+ เพิ่มเครื่องมือ</button></div>
             <div class="glass-panel table-wrap"><table><thead><tr><th>รูป</th><th>รหัส</th><th>ชื่อ</th><th>แผนก</th><th>ทั้งหมด</th><th>คงเหลือ</th><th>อยู่ที่</th><th style="text-align:right;">จัดการ</th></tr></thead><tbody id="mgmt-tools-body"></tbody></table></div>
+
+            <!-- จัดการผู้ใช้ -->
+            <div class="mgmt-header"><h2 class="section-title">👥 จัดการผู้ใช้</h2><button class="btn-primary btn-sm" onclick="openUserModal()">+ เพิ่มผู้ใช้</button></div>
+            <div class="glass-panel table-wrap"><table><thead><tr><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง</th><th>สิทธิ์</th><th style="text-align:right;">จัดการ</th></tr></thead><tbody id="mgmt-users-body"></tbody></table></div>
         </div>
     </div>
 
@@ -116,6 +120,18 @@
             <div class="form-group"><label>รูปภาพ</label><input type="file" id="tool-image-file" accept="image/*"><input type="hidden" id="tool-image-url"></div>
             <div class="form-row"><div class="form-group"><label>จำนวนทั้งหมด</label><input type="number" id="tool-total" value="1" min="0" required></div><div class="form-group"><label>คงเหลือ</label><input type="number" id="tool-available" value="1" min="0" required></div></div>
             <div class="modal-actions"><button type="button" class="btn-outline" onclick="closeToolModal()">ยกเลิก</button><button type="submit" class="btn-primary">บันทึก</button></div>
+        </form>
+    </div></div>
+
+    <!-- MODAL: ผู้ใช้ -->
+    <div class="modal-overlay" id="user-modal"><div class="glass-panel modal-content">
+        <h3>ข้อมูลผู้ใช้</h3>
+        <form id="user-form"><input type="hidden" id="edit-user-id">
+            <div class="form-group"><label>ชื่อผู้ใช้ (สำหรับล็อกอิน)</label><input type="text" id="user-username" autocomplete="off" required></div>
+            <div class="form-group"><label>ชื่อที่แสดง</label><input type="text" id="user-displayname" required></div>
+            <div class="form-group"><label>รหัสผ่าน <span id="user-pass-hint" style="color:var(--muted);font-size:0.75rem;"></span></label><input type="text" id="user-password" autocomplete="off"></div>
+            <div class="form-group"><label>สิทธิ์</label><select id="user-role" class="select-input"><option value="user">ผู้ใช้ทั่วไป (ดูอย่างเดียว)</option><option value="admin">แอดมิน (จัดการได้)</option></select></div>
+            <div class="modal-actions"><button type="button" class="btn-outline" onclick="closeUserModal()">ยกเลิก</button><button type="submit" class="btn-primary">บันทึก</button></div>
         </form>
     </div></div>
 

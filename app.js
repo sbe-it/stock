@@ -3,13 +3,25 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let categories=[], tools=[], sites=[], allLogs=[], currentView='inventory', currentDept='ช่างไฟ';
 
-// ===== AUTH (ฝั่งหน้าเว็บ) =====
-const ACCOUNTS = [
+// ===== AUTH =====
+// บัญชีเริ่มต้น (ใช้เป็น fallback กรณียังไม่ได้สร้างตาราง app_users ใน Supabase)
+const DEFAULT_ACCOUNTS = [
     { username:'admin', password:'admin123', role:'admin', name:'ผู้ดูแลระบบ' },
     { username:'user',  password:'user123',  role:'user',  name:'ผู้ใช้งาน' }
 ];
+let appUsers = [];        // รายชื่อผู้ใช้ที่ใช้ตรวจ login (จากฐานข้อมูลหรือ fallback)
+let usersTableReady = false; // true เมื่อโหลดจากตาราง app_users สำเร็จ
 let currentUser = null;
 const isAdmin = () => currentUser && currentUser.role === 'admin';
+
+async function fetchUsers(){
+    try{
+        const { data, error } = await _supabase.from('app_users').select('*').order('username');
+        if(error || !data){ usersTableReady=false; appUsers=DEFAULT_ACCOUNTS.slice(); return; }
+        usersTableReady=true;
+        appUsers = data.length ? data : DEFAULT_ACCOUNTS.slice();
+    }catch{ usersTableReady=false; appUsers=DEFAULT_ACCOUNTS.slice(); }
+}
 
 function getSession(){ try{ return JSON.parse(localStorage.getItem('toolflow_user')); }catch{ return null; } }
 function setSession(u){ localStorage.setItem('toolflow_user', JSON.stringify(u)); }
@@ -34,7 +46,7 @@ document.getElementById('login-form').addEventListener('submit', e=>{
     e.preventDefault();
     const u=document.getElementById('login-username').value.trim();
     const p=document.getElementById('login-password').value;
-    const acc=ACCOUNTS.find(a=>a.username===u && a.password===p);
+    const acc=appUsers.find(a=>a.username===u && a.password===p);
     const err=document.getElementById('login-error');
     if(!acc){ err.textContent='❌ ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'; return; }
     err.textContent='';
@@ -50,17 +62,19 @@ async function startApp(){
 }
 
 document.addEventListener('DOMContentLoaded', async()=>{
+    await fetchUsers();
     const s=getSession();
-    if(s && ACCOUNTS.some(a=>a.username===s.username && a.role===s.role)){
+    if(s && appUsers.some(a=>a.username===s.username && a.role===s.role)){
         currentUser=s;
         await startApp();
     } else {
+        clearSession();
         showLogin();
     }
 });
 
 async function refreshData() {
-    await Promise.all([fetchCategories(), fetchSites(), fetchTools(), fetchLogs()]);
+    await Promise.all([fetchCategories(), fetchSites(), fetchTools(), fetchLogs(), fetchUsers()]);
     updateStats(); render();
     if(window.lucide) lucide.createIcons();
 }
@@ -176,6 +190,17 @@ function renderMgmt() {
         const locStr=locs.length?locs.map(l=>`${l.name}(${l.qty})`).join(', '):'ในคลัง';
         tb.innerHTML+=`<tr><td><img src="${t.image_url||''}" style="width:28px;height:28px;border-radius:4px;"></td><td style="font-family:monospace;font-weight:700;">${t.tool_code||'-'}</td><td style="font-weight:600;">${t.name}</td><td><span class="badge-stock badge-ok" style="font-size:0.7rem;">${t.department}</span></td><td>${t.total_stock}</td><td>${t.available_stock}</td><td style="font-size:0.7rem;max-width:150px;color:var(--muted);">${locStr}</td><td style="text-align:right;white-space:nowrap;"><button class="btn-outline btn-sm" onclick="openLocationModal(${t.id})">📍</button> <button class="btn-outline btn-sm" onclick="openToolModal(${t.id})">✏️</button> <button class="btn-outline btn-sm btn-danger" onclick="deleteTool(${t.id})">🗑️</button></td></tr>`;
     });
+    // Users
+    const ub=document.getElementById('mgmt-users-body'); if(ub){ ub.innerHTML='';
+        if(!usersTableReady){
+            ub.innerHTML=`<tr><td colspan="4" style="color:var(--warning);padding:1rem;font-size:0.85rem;">⚠️ ยังไม่ได้สร้างตาราง <b>app_users</b> ในฐานข้อมูล จึงยังเพิ่ม/ลบผู้ใช้ถาวรไม่ได้ (ตอนนี้ใช้บัญชีเริ่มต้น admin/user) — รัน SQL ในไฟล์ <b>add-users-table.sql</b> ที่ Supabase ก่อน</td></tr>`;
+        } else if(!appUsers.length){
+            ub.innerHTML=`<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:1rem;">ยังไม่มีผู้ใช้</td></tr>`;
+        } else appUsers.forEach(u=>{
+            const isMe=currentUser&&u.username===currentUser.username;
+            ub.innerHTML+=`<tr><td style="font-family:monospace;font-weight:700;">${u.username}${isMe?' <span style="color:var(--muted);font-weight:400;">(คุณ)</span>':''}</td><td>${u.name||'-'}</td><td><span class="badge-stock ${u.role==='admin'?'badge-out':'badge-ok'}" style="font-size:0.7rem;">${u.role==='admin'?'แอดมิน':'ดูอย่างเดียว'}</span></td><td style="text-align:right;white-space:nowrap;"><button class="btn-outline btn-sm" onclick="openUserModal(${u.id})">✏️</button> <button class="btn-outline btn-sm btn-danger" onclick="deleteUser(${u.id})">🗑️</button></td></tr>`;
+        });
+    }
 }
 
 // ===== MODALS =====
@@ -209,6 +234,42 @@ document.getElementById('tool-form').addEventListener('submit',async e=>{
     if(id) await _supabase.from('tools').update(d).eq('id',id); else await _supabase.from('tools').insert([d]); await refreshData(); closeToolModal();
 });
 window.deleteTool=async id=>{ if(!isAdmin())return; if(confirm('ลบเครื่องมือ?')){ await _supabase.from('tools').delete().eq('id',id); await refreshData(); }};
+
+// User (จัดการผู้ใช้)
+window.openUserModal=(id=null)=>{
+    if(!isAdmin())return;
+    if(!usersTableReady){ alert('⚠️ ยังเพิ่ม/แก้ผู้ใช้ไม่ได้ ต้องสร้างตาราง app_users ใน Supabase ก่อน (ดู add-users-table.sql)'); return; }
+    document.getElementById('user-form').reset();
+    document.getElementById('edit-user-id').value=id||'';
+    const hint=document.getElementById('user-pass-hint'), passField=document.getElementById('user-password');
+    if(id){ const u=appUsers.find(x=>x.id==id); document.getElementById('user-username').value=u.username; document.getElementById('user-displayname').value=u.name||''; document.getElementById('user-role').value=u.role; hint.textContent='(เว้นว่าง = ใช้รหัสเดิม)'; passField.required=false; }
+    else { hint.textContent=''; passField.required=true; }
+    document.getElementById('user-modal').style.display='flex';
+};
+window.closeUserModal=()=>document.getElementById('user-modal').style.display='none';
+document.getElementById('user-form').addEventListener('submit',async e=>{
+    e.preventDefault(); if(!isAdmin()||!usersTableReady)return;
+    const id=document.getElementById('edit-user-id').value;
+    const username=document.getElementById('user-username').value.trim();
+    const name=document.getElementById('user-displayname').value.trim();
+    const password=document.getElementById('user-password').value;
+    const role=document.getElementById('user-role').value;
+    if(appUsers.some(u=>u.username===username && u.id!=id)){ alert('❌ ชื่อผู้ใช้นี้มีอยู่แล้ว'); return; }
+    // กันไม่ให้เผลอถอดสิทธิ์แอดมินคนสุดท้าย
+    if(id){ const u=appUsers.find(x=>x.id==id); if(u.role==='admin' && role!=='admin' && appUsers.filter(a=>a.role==='admin').length<=1){ alert('❌ ต้องมีแอดมินอย่างน้อย 1 คน'); return; } }
+    const d={ username, name, role };
+    if(password) d.password=password;
+    if(id) await _supabase.from('app_users').update(d).eq('id',id);
+    else await _supabase.from('app_users').insert([d]);
+    await fetchUsers(); renderMgmt(); closeUserModal();
+});
+window.deleteUser=async id=>{
+    if(!isAdmin()||!usersTableReady)return;
+    const u=appUsers.find(x=>x.id==id); if(!u)return;
+    if(currentUser && u.username===currentUser.username){ alert('❌ ลบบัญชีที่กำลังใช้งานอยู่ไม่ได้'); return; }
+    if(u.role==='admin' && appUsers.filter(a=>a.role==='admin').length<=1){ alert('❌ ต้องมีแอดมินอย่างน้อย 1 คน'); return; }
+    if(confirm(`ลบผู้ใช้ "${u.username}"?`)){ await _supabase.from('app_users').delete().eq('id',id); await fetchUsers(); renderMgmt(); }
+};
 
 // Action (เบิก/คืน)
 window.openActionModal=(id,type)=>{
