@@ -118,3 +118,16 @@ input, .select-input { width:100%; background:rgba(255,255,255,0.05); border:1px
     
     input, .select-input, button { min-height: 40px; }
 }
+
+/* ===== LOGIN ===== */
+.login-overlay { position:fixed; inset:0; z-index:2000; display:none; align-items:center; justify-content:center; padding:1.5rem; background:rgba(15,23,42,0.92); backdrop-filter:blur(8px); }
+.login-box { width:100%; max-width:380px; padding:2rem; text-align:center; }
+.login-logo { height:56px; width:56px; object-fit:contain; border-radius:10px; background:#fff; padding:6px; margin-bottom:0.75rem; }
+.login-box h2 { font-size:1.25rem; margin-bottom:1.5rem; }
+.login-box .form-group { text-align:left; }
+.login-error { color:var(--danger); font-size:0.85rem; min-height:1.2rem; margin-bottom:0.5rem; font-weight:600; }
+.user-badge { display:inline-flex; align-items:center; padding:0.4rem 0.8rem; font-size:0.8rem; font-weight:600; color:var(--muted); border:1px solid var(--border); border-radius:0.5rem; }
+
+/* ===== ROLE: USER (ดูอย่างเดียว) ===== */
+body.role-user #nav-mgmt,
+body.role-user .tool-actions { display:none !important; }

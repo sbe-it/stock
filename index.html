@@ -17,6 +17,20 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
+    <!-- LOGIN SCREEN -->
+    <div class="login-overlay" id="login-overlay">
+        <div class="glass-panel login-box">
+            <img src="logo.png" alt="SBE Logo" class="login-logo">
+            <h2>เข้าสู่ระบบ TOOLFLOW</h2>
+            <form id="login-form">
+                <div class="form-group"><label>ชื่อผู้ใช้</label><input type="text" id="login-username" autocomplete="username" required></div>
+                <div class="form-group"><label>รหัสผ่าน</label><input type="password" id="login-password" autocomplete="current-password" required></div>
+                <div class="login-error" id="login-error"></div>
+                <button type="submit" class="btn-primary" style="width:100%;">เข้าสู่ระบบ</button>
+            </form>
+        </div>
+    </div>
+
     <nav>
         <div class="logo" onclick="location.reload()">
             <img src="logo.png" alt="SBE Logo" class="logo-img">
@@ -27,6 +41,8 @@
             <button class="nav-btn active" id="nav-inventory" onclick="switchView('inventory')">📦 คลังเครื่องมือ</button>
             <button class="nav-btn" id="nav-sites" onclick="switchView('sites')">📍 ไซงาน</button>
             <button class="nav-btn" id="nav-mgmt" onclick="switchView('management')">⚙️ จัดการ</button>
+            <span class="user-badge" id="user-badge"></span>
+            <button class="nav-btn" id="nav-logout" onclick="logout()">🚪 ออกจากระบบ</button>
         </div>
     </nav>
 

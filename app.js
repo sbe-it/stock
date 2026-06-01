@@ -3,7 +3,61 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 let categories=[], tools=[], sites=[], allLogs=[], currentView='inventory', currentDept='ช่างไฟ';
 
-document.addEventListener('DOMContentLoaded', async()=>{ await refreshData(); });
+// ===== AUTH (ฝั่งหน้าเว็บ) =====
+const ACCOUNTS = [
+    { username:'admin', password:'admin123', role:'admin', name:'ผู้ดูแลระบบ' },
+    { username:'user',  password:'user123',  role:'user',  name:'ผู้ใช้งาน' }
+];
+let currentUser = null;
+const isAdmin = () => currentUser && currentUser.role === 'admin';
+
+function getSession(){ try{ return JSON.parse(localStorage.getItem('toolflow_user')); }catch{ return null; } }
+function setSession(u){ localStorage.setItem('toolflow_user', JSON.stringify(u)); }
+function clearSession(){ localStorage.removeItem('toolflow_user'); }
+
+function applyRoleUI(){
+    const admin = isAdmin();
+    document.body.classList.toggle('role-user', !admin);
+    document.body.classList.toggle('role-admin', admin);
+    const badge = document.getElementById('user-badge');
+    if(badge && currentUser) badge.textContent = `${currentUser.name} (${admin?'แอดมิน':'ดูอย่างเดียว'})`;
+    // ถ้า user อยู่หน้าจัดการ ให้เด้งกลับหน้าคลัง
+    if(!admin && currentView==='management') switchView('inventory');
+}
+
+function showLogin(){ document.getElementById('login-overlay').style.display='flex'; }
+function hideLogin(){ document.getElementById('login-overlay').style.display='none'; }
+
+window.logout = ()=>{ clearSession(); currentUser=null; location.reload(); };
+
+document.getElementById('login-form').addEventListener('submit', e=>{
+    e.preventDefault();
+    const u=document.getElementById('login-username').value.trim();
+    const p=document.getElementById('login-password').value;
+    const acc=ACCOUNTS.find(a=>a.username===u && a.password===p);
+    const err=document.getElementById('login-error');
+    if(!acc){ err.textContent='❌ ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง'; return; }
+    err.textContent='';
+    currentUser={ username:acc.username, role:acc.role, name:acc.name };
+    setSession(currentUser);
+    startApp();
+});
+
+async function startApp(){
+    hideLogin();
+    applyRoleUI();
+    await refreshData();
+}
+
+document.addEventListener('DOMContentLoaded', async()=>{
+    const s=getSession();
+    if(s && ACCOUNTS.some(a=>a.username===s.username && a.role===s.role)){
+        currentUser=s;
+        await startApp();
+    } else {
+        showLogin();
+    }
+});
 
 async function refreshData() {
     await Promise.all([fetchCategories(), fetchSites(), fetchTools(), fetchLogs()]);
@@ -12,7 +66,7 @@ async function refreshData() {
 }
 async function fetchCategories(){ const{data}=await _supabase.from('categories').select('*').order('name'); categories=data||[]; }
 async function fetchSites(){ const{data}=await _supabase.from('sites').select('*').order('name'); sites=data||[]; }
-async function fetchTools(){ const{data}=await _supabase.from('tools').select('*, categories(name)').order('name'); tools=data||[]; }
+async function fetchTools(){ const{data}=await _supabase.from('tools').select('*, categories(name)').order('tool_code',{ascending:true}); tools=(data||[]).sort((a,b)=>(a.tool_code||'').localeCompare(b.tool_code||'','th',{numeric:true})); }
 async function fetchLogs(){
     const{data}=await _supabase.from('transactions').select('*, tools(name,department), sites(name)').order('timestamp',{ascending:false}).limit(500);
     allLogs=data?data.map(l=>({...l, tool_name:l.tools?l.tools.name:'?', department:l.tools?l.tools.department:'-', site_name:l.sites?l.sites.name:'-'})):[];
@@ -49,6 +103,7 @@ function render() {
 // ===== VIEW SWITCHING =====
 const viewNavMap = {inventory:'nav-inventory', sites:'nav-sites', management:'nav-mgmt'};
 window.switchView = v => {
+    if(v==='management' && !isAdmin()) v='inventory';
     currentView=v;
     ['inventory','sites','management'].forEach(id=>{
         document.getElementById('view-'+id).style.display=id===v?'block':'none';
@@ -63,7 +118,7 @@ window.switchDept = d => {
     refreshData();
 };
 window.toggleEl = (id,chId) => {
-    const el=document.getElementById(id), ch=document.getElementById(chId), h=el.style.display==='none';
+    const el=document.getElementById(id), ch=document.getElementById(chId), h=getComputedStyle(el).display==='none';
     el.style.display=h?'block':'none'; if(ch) ch.style.transform=h?'rotate(180deg)':'rotate(0)';
 };
 
@@ -125,38 +180,39 @@ function renderMgmt() {
 
 // ===== MODALS =====
 // Site
-window.openSiteModal=(id=null)=>{ document.getElementById('site-form').reset(); document.getElementById('edit-site-id').value=id||''; if(id) document.getElementById('site-name').value=sites.find(s=>s.id==id).name; document.getElementById('site-modal').style.display='flex'; };
+window.openSiteModal=(id=null)=>{ if(!isAdmin())return; document.getElementById('site-form').reset(); document.getElementById('edit-site-id').value=id||''; if(id) document.getElementById('site-name').value=sites.find(s=>s.id==id).name; document.getElementById('site-modal').style.display='flex'; };
 window.closeSiteModal=()=>document.getElementById('site-modal').style.display='none';
-document.getElementById('site-form').addEventListener('submit',async e=>{ e.preventDefault(); const id=document.getElementById('edit-site-id').value, n=document.getElementById('site-name').value; if(id) await _supabase.from('sites').update({name:n}).eq('id',id); else await _supabase.from('sites').insert([{name:n}]); await refreshData(); closeSiteModal(); });
-window.deleteSite=async id=>{ if(confirm('ลบไซงานนี้?')){ await _supabase.from('sites').delete().eq('id',id); await refreshData(); }};
+document.getElementById('site-form').addEventListener('submit',async e=>{ e.preventDefault(); if(!isAdmin())return; const id=document.getElementById('edit-site-id').value, n=document.getElementById('site-name').value; if(id) await _supabase.from('sites').update({name:n}).eq('id',id); else await _supabase.from('sites').insert([{name:n}]); await refreshData(); closeSiteModal(); });
+window.deleteSite=async id=>{ if(!isAdmin())return; if(confirm('ลบไซงานนี้?')){ await _supabase.from('sites').delete().eq('id',id); await refreshData(); }};
 
 // Category
-window.openCategoryModal=(id=null)=>{ document.getElementById('category-form').reset(); document.getElementById('edit-cat-id').value=id||''; if(id){ const c=categories.find(x=>x.id==id); document.getElementById('cat-name').value=c.name; document.getElementById('cat-dept').value=c.department; document.getElementById('cat-image-url').value=c.image_url; } document.getElementById('category-modal').style.display='flex'; };
+window.openCategoryModal=(id=null)=>{ if(!isAdmin())return; document.getElementById('category-form').reset(); document.getElementById('edit-cat-id').value=id||''; if(id){ const c=categories.find(x=>x.id==id); document.getElementById('cat-name').value=c.name; document.getElementById('cat-dept').value=c.department; document.getElementById('cat-image-url').value=c.image_url; } document.getElementById('category-modal').style.display='flex'; };
 window.closeCategoryModal=()=>document.getElementById('category-modal').style.display='none';
 document.getElementById('category-form').addEventListener('submit',async e=>{
-    e.preventDefault(); const id=document.getElementById('edit-cat-id').value; const file=document.getElementById('cat-image-file').files[0]; let url=document.getElementById('cat-image-url').value;
+    e.preventDefault(); if(!isAdmin())return; const id=document.getElementById('edit-cat-id').value; const file=document.getElementById('cat-image-file').files[0]; let url=document.getElementById('cat-image-url').value;
     if(file){ const p=`${Date.now()}.${file.name.split('.').pop()}`; const{error}=await _supabase.storage.from('category-images').upload(p,file); if(error){alert('อัปโหลดไม่ได้');return;} url=_supabase.storage.from('category-images').getPublicUrl(p).data.publicUrl; }
     const d={name:document.getElementById('cat-name').value,department:document.getElementById('cat-dept').value,image_url:url};
     if(id) await _supabase.from('categories').update(d).eq('id',id); else await _supabase.from('categories').insert([d]); await refreshData(); closeCategoryModal();
 });
-window.deleteCategory=async id=>{ if(confirm('ลบกลุ่ม?')){ await _supabase.from('categories').delete().eq('id',id); await refreshData(); }};
+window.deleteCategory=async id=>{ if(!isAdmin())return; if(confirm('ลบกลุ่ม?')){ await _supabase.from('categories').delete().eq('id',id); await refreshData(); }};
 
 // Tool
-window.openToolModal=(id=null)=>{ document.getElementById('tool-form').reset(); document.getElementById('edit-tool-id').value=id||''; if(id){ const t=tools.find(x=>x.id==id); document.getElementById('tool-code').value=t.tool_code||''; document.getElementById('tool-name').value=t.name; document.getElementById('tool-dept').value=t.department; document.getElementById('tool-total').value=t.total_stock; document.getElementById('tool-available').value=t.available_stock; document.getElementById('tool-image-url').value=t.image_url; } updateToolCatList(); document.getElementById('tool-modal').style.display='flex'; };
+window.openToolModal=(id=null)=>{ if(!isAdmin())return; document.getElementById('tool-form').reset(); document.getElementById('edit-tool-id').value=id||''; if(id){ const t=tools.find(x=>x.id==id); document.getElementById('tool-code').value=t.tool_code||''; document.getElementById('tool-name').value=t.name; document.getElementById('tool-dept').value=t.department; document.getElementById('tool-total').value=t.total_stock; document.getElementById('tool-available').value=t.available_stock; document.getElementById('tool-image-url').value=t.image_url; } updateToolCatList(); document.getElementById('tool-modal').style.display='flex'; };
 window.updateToolCatList=()=>{ const d=document.getElementById('tool-dept').value, s=document.getElementById('tool-category-id'); s.innerHTML='<option value="">-- เลือก --</option>'; categories.filter(c=>c.department===d).forEach(c=>s.innerHTML+=`<option value="${c.id}">${c.name}</option>`); const id=document.getElementById('edit-tool-id').value; if(id){ const t=tools.find(x=>x.id==id); if(t&&t.department===d) s.value=t.category_id||''; }};
 window.closeToolModal=()=>document.getElementById('tool-modal').style.display='none';
 document.getElementById('tool-form').addEventListener('submit',async e=>{
-    e.preventDefault(); const id=document.getElementById('edit-tool-id').value, tc=document.getElementById('tool-code').value.trim();
+    e.preventDefault(); if(!isAdmin())return; const id=document.getElementById('edit-tool-id').value, tc=document.getElementById('tool-code').value.trim();
     if(tools.some(t=>t.tool_code===tc&&t.id!=id)){alert('❌ รหัสซ้ำ');return;}
     const file=document.getElementById('tool-image-file').files[0]; let url=document.getElementById('tool-image-url').value;
     if(file){ const p=`${Date.now()}.${file.name.split('.').pop()}`; const{error}=await _supabase.storage.from('tool-images').upload(p,file); if(error){alert('อัปโหลดไม่ได้');return;} url=_supabase.storage.from('tool-images').getPublicUrl(p).data.publicUrl; }
     const d={tool_code:tc,name:document.getElementById('tool-name').value,department:document.getElementById('tool-dept').value,category_id:document.getElementById('tool-category-id').value||null,image_url:url,total_stock:parseInt(document.getElementById('tool-total').value),available_stock:parseInt(document.getElementById('tool-available').value)};
     if(id) await _supabase.from('tools').update(d).eq('id',id); else await _supabase.from('tools').insert([d]); await refreshData(); closeToolModal();
 });
-window.deleteTool=async id=>{ if(confirm('ลบเครื่องมือ?')){ await _supabase.from('tools').delete().eq('id',id); await refreshData(); }};
+window.deleteTool=async id=>{ if(!isAdmin())return; if(confirm('ลบเครื่องมือ?')){ await _supabase.from('tools').delete().eq('id',id); await refreshData(); }};
 
 // Action (เบิก/คืน)
 window.openActionModal=(id,type)=>{
+    if(!isAdmin())return;
     const t=tools.find(x=>x.id==id);
     document.getElementById('action-form').reset();
     document.getElementById('action-tool-id').value=id; document.getElementById('action-type').value=type;
@@ -171,7 +227,7 @@ window.openActionModal=(id,type)=>{
 };
 window.closeActionModal=()=>document.getElementById('action-modal').style.display='none';
 document.getElementById('action-form').addEventListener('submit',async e=>{
-    e.preventDefault();
+    e.preventDefault(); if(!isAdmin())return;
     const id=document.getElementById('action-tool-id').value, type=document.getElementById('action-type').value;
     const siteId=document.getElementById('action-site-id').value||null, un=document.getElementById('user-name').value;
     const t=tools.find(x=>x.id==id), qty=parseInt(document.getElementById('quantity').value);
