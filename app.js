@@ -322,9 +322,19 @@ window.openActionModal=(id,type)=>{
     document.getElementById('action-modal-title').textContent=type==='BORROW'?'เบิกเครื่องมือ':'คืนเครื่องมือ (เข้าส่วนกลาง)';
     document.getElementById('label-user-name').textContent=type==='BORROW'?'ชื่อผู้เบิก':'ชื่อผู้คืน';
     document.getElementById('label-receiver-name').textContent=type==='BORROW'?'ชื่อผู้ให้เบิก':'ชื่อผู้รับคืน';
-    const sg=document.getElementById('site-selection-group'), ss=document.getElementById('action-site-id');
-    if(type==='BORROW'){ sg.style.display='block'; ss.innerHTML='<option value="">-- เลือกไซงาน --</option>'; sites.forEach(s=>ss.innerHTML+=`<option value="${s.id}">${s.name}</option>`); }
-    else { sg.style.display='none'; ss.value=''; }
+    const sg=document.getElementById('site-selection-group'), ss=document.getElementById('action-site-id'), sl=document.getElementById('label-site');
+    if(type==='BORROW'){
+        sg.style.display='block'; sl.textContent='ไซงานที่จะส่งไป';
+        ss.innerHTML='<option value="">-- เลือกไซงาน --</option>'; sites.forEach(s=>ss.innerHTML+=`<option value="${s.id}">${s.name}</option>`);
+    } else {
+        // คืน: ต้องบอกว่าคืนมาจากไซไหน เพื่อให้หักจำนวนออกจากไซนั้นถูกต้อง
+        // แสดงเฉพาะไซที่เครื่องมือนี้ยังออกไปอยู่จริง
+        const locs=getToolLocations(id).filter(l=>l.name!=='ไม่ระบุ');
+        sg.style.display='block'; sl.textContent='ไซงานที่คืนมาจาก';
+        ss.innerHTML='<option value="">-- เลือกไซงาน --</option>';
+        locs.forEach(l=>{ const s=sites.find(x=>x.name===l.name); if(s) ss.innerHTML+=`<option value="${s.id}">${s.name} (เบิกไป ${l.qty})</option>`; });
+        ss.innerHTML+='<option value="__central">คืนจากส่วนกลาง / ไม่ระบุไซ</option>';
+    }
     // จำกัดจำนวนสูงสุดที่เบิกได้ = ของที่เหลือจริง (กันการพิมพ์เกิน)
     const qtyInput=document.getElementById('quantity');
     if(type==='BORROW'){ qtyInput.max=t.available_stock; } else { qtyInput.removeAttribute('max'); }
@@ -336,9 +346,13 @@ document.getElementById('action-form').addEventListener('submit',async e=>{
     e.preventDefault(); if(!isAdmin())return;
     if(actionSubmitting) return; // กำลังทำรายการอยู่ ห้ามกดซ้ำ
     const id=document.getElementById('action-tool-id').value, type=document.getElementById('action-type').value;
-    const siteId=document.getElementById('action-site-id').value||null, un=document.getElementById('user-name').value;
+    const siteRaw=document.getElementById('action-site-id').value;
+    const siteId=(!siteRaw||siteRaw==='__central')?null:siteRaw, un=document.getElementById('user-name').value;
     const t=tools.find(x=>x.id==id), qty=parseInt(document.getElementById('quantity').value);
     if(!Number.isInteger(qty)||qty<1) return alert('จำนวนไม่ถูกต้อง');
+    if(type==='RETURN' && !siteRaw) return alert('กรุณาเลือกว่าคืนมาจากไซงานไหน');
+    // คืนจากไซที่ระบุ: จำนวนคืนต้องไม่เกินที่เบิกออกไปจากไซนั้น
+    if(type==='RETURN' && siteId){ const loc=getToolLocations(id).find(l=>{const s=sites.find(x=>x.name===l.name);return s&&String(s.id)===String(siteId);}); if(loc&&qty>loc.qty) return alert(`ไซนี้เบิกไปแค่ ${loc.qty} ชิ้น คืนเกินไม่ได้`); }
     const submitBtn=e.submitter||document.querySelector('#action-form button[type="submit"]');
     actionSubmitting=true; if(submitBtn) submitBtn.disabled=true;
     try{
@@ -351,7 +365,7 @@ document.getElementById('action-form').addEventListener('submit',async e=>{
         const{data:updated,error:uErr}=await _supabase.from('tools')
             .update({available_stock:ns}).eq('id',id).eq('available_stock',cur).select();
         if(uErr||!updated||!updated.length){ alert('มีคนทำรายการนี้ไปก่อนแล้ว กรุณาลองใหม่'); await refreshData(); return; }
-        await _supabase.from('transactions').insert([{tool_id:id,site_id:type==='BORROW'?siteId:null,user_name:un,receiver_name:document.getElementById('receiver-name').value,type,quantity:qty}]);
+        await _supabase.from('transactions').insert([{tool_id:id,site_id:siteId,user_name:un,receiver_name:document.getElementById('receiver-name').value,type,quantity:qty}]);
         await refreshData(); closeActionModal();
     } finally {
         actionSubmitting=false; if(submitBtn) submitBtn.disabled=false;
