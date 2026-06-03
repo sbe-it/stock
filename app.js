@@ -215,7 +215,7 @@ function renderInventory() {
             let locHtml='';
             if(locs.length) locHtml='<div class="card-badges">'+locs.map(l=>`<span class="badge badge-site">📍 ${l.name} (${l.qty})</span><span class="badge badge-user">👤 ${l.users.join(', ')}</span>`).join('')+'</div>';
             const card=document.createElement('div'); card.className='glass-panel tool-card';
-            card.innerHTML=`<div class="card-btns"><button class="card-btn" onclick="event.stopPropagation();openLocationModal(${tool.id})" title="ดูสถานที่">📍</button><button class="card-btn" onclick="event.stopPropagation();openHistoryModal(${tool.id})" title="ดูประวัติ">🕐</button></div><img src="${tool.image_url||'https://images.unsplash.com/photo-1530124560676-587cabee147a?q=80&w=400'}" class="tool-image"><div class="tool-info"><div style="font-size:0.7rem;color:var(--primary);font-weight:800;">${tool.tool_code||'NO-CODE'}</div><div class="tool-name">${tool.name}</div><div class="tool-meta"><span class="badge-stock ${oos?'badge-out':'badge-ok'}">${oos?'เบิกหมด':'คงเหลือ '+tool.available_stock}</span><span style="color:var(--muted)">/ ${tool.total_stock}</span></div>${locHtml}</div><div class="tool-actions"><button class="btn-primary" onclick="openActionModal(${tool.id},'BORROW')" ${oos?'disabled':''}>เบิก</button><button class="btn-outline" onclick="openActionModal(${tool.id},'RETURN')">คืน</button></div>`;
+            card.innerHTML=`<div class="card-btns"><button class="card-btn" onclick="event.stopPropagation();openLocationModal(${tool.id})" title="ดูสถานที่">📍</button><button class="card-btn" onclick="event.stopPropagation();openHistoryModal(${tool.id})" title="ดูประวัติ">🕐</button></div><img src="${tool.image_url||'https://images.unsplash.com/photo-1530124560676-587cabee147a?q=80&w=400'}" class="tool-image" loading="lazy" decoding="async"><div class="tool-info"><div style="font-size:0.7rem;color:var(--primary);font-weight:800;">${tool.tool_code||'NO-CODE'}</div><div class="tool-name">${tool.name}</div><div class="tool-meta"><span class="badge-stock ${oos?'badge-out':'badge-ok'}">${oos?'เบิกหมด':'คงเหลือ '+tool.available_stock}</span><span style="color:var(--muted)">/ ${tool.total_stock}</span></div>${locHtml}</div><div class="tool-actions"><button class="btn-primary" onclick="openActionModal(${tool.id},'BORROW')" ${oos?'disabled':''}>เบิก</button><button class="btn-outline" onclick="openActionModal(${tool.id},'RETURN')">คืน</button></div>`;
             grid.appendChild(card);
         });
     });
@@ -254,7 +254,7 @@ function renderMgmt() {
     tools.forEach(t=>{
         const locs=getToolLocations(t.id);
         const locStr=locs.length?locs.map(l=>`${l.name}(${l.qty})`).join(', '):'ในคลัง';
-        tb.innerHTML+=`<tr><td><img src="${t.image_url||''}" style="width:28px;height:28px;border-radius:4px;"></td><td style="font-family:monospace;font-weight:700;">${t.tool_code||'-'}</td><td style="font-weight:600;">${t.name}</td><td><span class="badge-stock badge-ok" style="font-size:0.7rem;">${t.department}</span></td><td>${t.total_stock}</td><td>${t.available_stock}</td><td style="font-size:0.7rem;max-width:150px;color:var(--muted);">${locStr}</td><td style="text-align:right;white-space:nowrap;"><button class="btn-outline btn-sm" onclick="openLocationModal(${t.id})">📍</button> <button class="btn-outline btn-sm" onclick="openToolModal(${t.id})">✏️</button> <button class="btn-outline btn-sm btn-danger" onclick="deleteTool(${t.id})">🗑️</button></td></tr>`;
+        tb.innerHTML+=`<tr><td><img src="${t.image_url||''}" loading="lazy" decoding="async" style="width:28px;height:28px;border-radius:4px;"></td><td style="font-family:monospace;font-weight:700;">${t.tool_code||'-'}</td><td style="font-weight:600;">${t.name}</td><td><span class="badge-stock badge-ok" style="font-size:0.7rem;">${t.department}</span></td><td>${t.total_stock}</td><td>${t.available_stock}</td><td style="font-size:0.7rem;max-width:150px;color:var(--muted);">${locStr}</td><td style="text-align:right;white-space:nowrap;"><button class="btn-outline btn-sm" onclick="openLocationModal(${t.id})">📍</button> <button class="btn-outline btn-sm" onclick="openToolModal(${t.id})">✏️</button> <button class="btn-outline btn-sm btn-danger" onclick="deleteTool(${t.id})">🗑️</button></td></tr>`;
     });
     // Users
     const ub=document.getElementById('mgmt-users-body'); if(ub){ ub.innerHTML='';
@@ -269,6 +269,26 @@ function renderMgmt() {
     }
 }
 
+// ===== บีบอัด/ย่อรูปก่อนอัปโหลด (ลด Egress / Storage ให้อยู่ในโควต้าฟรี) =====
+// ย่อให้ด้านยาวสุดไม่เกิน maxDim px แล้วบีบเป็น webp/jpeg คุณภาพ ~0.72
+async function compressImage(file, maxDim=600, quality=0.72){
+    try{
+        if(!file || !file.type || !file.type.startsWith('image/')) return {blob:file, ext:(file.name.split('.').pop()||'jpg'), type:file.type};
+        const dataUrl=await new Promise((res,rej)=>{ const r=new FileReader(); r.onload=()=>res(r.result); r.onerror=rej; r.readAsDataURL(file); });
+        const img=await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=dataUrl; });
+        let w=img.naturalWidth, h=img.naturalHeight;
+        if(w>maxDim || h>maxDim){ const s=Math.min(maxDim/w, maxDim/h); w=Math.round(w*s); h=Math.round(h*s); }
+        const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+        canvas.getContext('2d').drawImage(img,0,0,w,h);
+        let type='image/webp';
+        let blob=await new Promise(r=>canvas.toBlob(r,type,quality));
+        if(!blob){ type='image/jpeg'; blob=await new Promise(r=>canvas.toBlob(r,type,quality)); }
+        // ถ้าบีบแล้วไม่เล็กลง (รูปเล็กอยู่แล้ว) ใช้ไฟล์เดิม
+        if(!blob || blob.size>=file.size) return {blob:file, ext:(file.name.split('.').pop()||'jpg'), type:file.type};
+        return {blob, ext:(type==='image/webp'?'webp':'jpg'), type};
+    }catch(err){ console.warn('ย่อรูปไม่สำเร็จ ใช้ไฟล์เดิม:', err); return {blob:file, ext:(file.name.split('.').pop()||'jpg'), type:file.type}; }
+}
+
 // ===== MODALS =====
 // Site
 window.openSiteModal=(id=null)=>{ if(!isAdmin())return; document.getElementById('site-form').reset(); document.getElementById('edit-site-id').value=id||''; if(id) document.getElementById('site-name').value=sites.find(s=>s.id==id).name; document.getElementById('site-modal').style.display='flex'; };
@@ -281,7 +301,7 @@ window.openCategoryModal=(id=null)=>{ if(!isAdmin())return; document.getElementB
 window.closeCategoryModal=()=>document.getElementById('category-modal').style.display='none';
 document.getElementById('category-form').addEventListener('submit',async e=>{
     e.preventDefault(); if(!isAdmin())return; const id=document.getElementById('edit-cat-id').value; const file=document.getElementById('cat-image-file').files[0]; let url=document.getElementById('cat-image-url').value;
-    if(file){ const p=`${Date.now()}.${file.name.split('.').pop()}`; const{error}=await _supabase.storage.from('category-images').upload(p,file); if(error){alert('อัปโหลดไม่ได้');return;} url=_supabase.storage.from('category-images').getPublicUrl(p).data.publicUrl; }
+    if(file){ const {blob,ext,type}=await compressImage(file); const p=`${Date.now()}.${ext}`; const{error}=await _supabase.storage.from('category-images').upload(p,blob,{cacheControl:'604800',contentType:type||undefined}); if(error){alert('อัปโหลดไม่ได้');return;} url=_supabase.storage.from('category-images').getPublicUrl(p).data.publicUrl; }
     const d={name:document.getElementById('cat-name').value,department:document.getElementById('cat-dept').value,image_url:url};
     if(id) await _supabase.from('categories').update(d).eq('id',id); else await _supabase.from('categories').insert([d]); await refreshData(); closeCategoryModal();
 });
@@ -297,7 +317,7 @@ document.getElementById('tool-form').addEventListener('submit',async e=>{
     const tcKey=tc.toLowerCase();
     if(tools.some(t=>(t.tool_code||'').trim().toLowerCase()===tcKey&&t.id!=id)){alert('❌ รหัสซ้ำ');return;}
     const file=document.getElementById('tool-image-file').files[0]; let url=document.getElementById('tool-image-url').value;
-    if(file){ const p=`${Date.now()}.${file.name.split('.').pop()}`; const{error}=await _supabase.storage.from('tool-images').upload(p,file); if(error){alert('อัปโหลดไม่ได้');return;} url=_supabase.storage.from('tool-images').getPublicUrl(p).data.publicUrl; }
+    if(file){ const {blob,ext,type}=await compressImage(file); const p=`${Date.now()}.${ext}`; const{error}=await _supabase.storage.from('tool-images').upload(p,blob,{cacheControl:'604800',contentType:type||undefined}); if(error){alert('อัปโหลดไม่ได้');return;} url=_supabase.storage.from('tool-images').getPublicUrl(p).data.publicUrl; }
     const d={tool_code:tc,name:document.getElementById('tool-name').value,department:document.getElementById('tool-dept').value,category_id:document.getElementById('tool-category-id').value||null,image_url:url,total_stock:parseInt(document.getElementById('tool-total').value),available_stock:parseInt(document.getElementById('tool-available').value)};
     if(id) await _supabase.from('tools').update(d).eq('id',id); else await _supabase.from('tools').insert([d]); await refreshData(); closeToolModal();
 });
