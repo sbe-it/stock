@@ -83,6 +83,7 @@ async function refreshData() {
         buildToolLocations();
         updateStats(); render();
         if(window.lucide) lucide.createIcons();
+        autoOptimizeImages(); // ย่อรูปเก่าเบื้องหลัง (ไม่รอ ไม่บล็อกหน้าจอ)
     }catch(err){
         console.error('โหลดข้อมูลไม่สำเร็จ:', err);
         const c=document.getElementById('inventory-content');
@@ -289,6 +290,42 @@ async function compressImage(file, maxDim=600, quality=0.72){
     }catch(err){ console.warn('ย่อรูปไม่สำเร็จ ใช้ไฟล์เดิม:', err); return {blob:file, ext:(file.name.split('.').pop()||'jpg'), type:file.type}; }
 }
 
+// ===== ย่อรูปเก่าอัตโนมัติเบื้องหลัง (แอดมินไม่ต้องทำอะไร) =====
+// ทำงานเงียบ ๆ ตอนแอดมินเปิดแอป: ดึงรูปเก่าที่ยังไม่ถูกย่อ มาย่อแล้วอัปทับ
+// - ทำเครื่องหมายไฟล์ที่ย่อแล้วด้วย "-opt." จะได้ไม่ทำซ้ำ
+// - เก็บไฟล์เดิมไว้ (ไม่ลบ) เผื่อย้อนกลับ
+let autoOptRunning=false;
+async function autoOptimizeImages(){
+    if(autoOptRunning || !isAdmin()) return;
+    autoOptRunning=true;
+    let changed=0;
+    try{
+        const isOld=u=>u && u.includes('/storage/v1/object/public/') && !u.includes('-opt.');
+        const jobs=[
+            ...tools.filter(t=>isOld(t.image_url)).map(t=>({table:'tools',bucket:'tool-images',row:t})),
+            ...categories.filter(c=>isOld(c.image_url)).map(c=>({table:'categories',bucket:'category-images',row:c})),
+        ];
+        for(const j of jobs){
+            try{
+                const resp=await fetch(j.row.image_url); if(!resp.ok) continue;
+                const blob=await resp.blob(); if(!blob.type || !blob.type.startsWith('image/')) continue;
+                const file=new File([blob],'old',{type:blob.type});
+                const {blob:cblob,ext,type}=await compressImage(file);
+                const p=`${Date.now()}-${Math.random().toString(36).slice(2,7)}-opt.${ext}`;
+                const{error}=await _supabase.storage.from(j.bucket).upload(p,cblob,{cacheControl:'604800',contentType:type||undefined});
+                if(error){ console.warn('อัปรูปย่อไม่ได้ ข้ามไป:',error.message); continue; }
+                const newUrl=_supabase.storage.from(j.bucket).getPublicUrl(p).data.publicUrl;
+                const{error:uErr}=await _supabase.from(j.table).update({image_url:newUrl}).eq('id',j.row.id);
+                if(uErr){ console.warn('อัปเดต URL ไม่ได้ ข้ามไป:',uErr.message); continue; }
+                j.row.image_url=newUrl; changed++;
+            }catch(e){ /* รูปนี้ดึง/ย่อไม่ได้ (เช่นติด CORS) ข้ามไปเงียบ ๆ */ }
+        }
+    } finally {
+        autoOptRunning=false;
+        if(changed){ console.log(`✅ ย่อรูปเก่าอัตโนมัติแล้ว ${changed} รูป`); buildToolLocations(); render(); if(window.lucide) lucide.createIcons(); }
+    }
+}
+
 // ===== MODALS =====
 // Site
 window.openSiteModal=(id=null)=>{ if(!isAdmin())return; document.getElementById('site-form').reset(); document.getElementById('edit-site-id').value=id||''; if(id) document.getElementById('site-name').value=sites.find(s=>s.id==id).name; document.getElementById('site-modal').style.display='flex'; };
@@ -301,7 +338,7 @@ window.openCategoryModal=(id=null)=>{ if(!isAdmin())return; document.getElementB
 window.closeCategoryModal=()=>document.getElementById('category-modal').style.display='none';
 document.getElementById('category-form').addEventListener('submit',async e=>{
     e.preventDefault(); if(!isAdmin())return; const id=document.getElementById('edit-cat-id').value; const file=document.getElementById('cat-image-file').files[0]; let url=document.getElementById('cat-image-url').value;
-    if(file){ const {blob,ext,type}=await compressImage(file); const p=`${Date.now()}.${ext}`; const{error}=await _supabase.storage.from('category-images').upload(p,blob,{cacheControl:'604800',contentType:type||undefined}); if(error){alert('อัปโหลดไม่ได้');return;} url=_supabase.storage.from('category-images').getPublicUrl(p).data.publicUrl; }
+    if(file){ const {blob,ext,type}=await compressImage(file); const p=`${Date.now()}-opt.${ext}`; const{error}=await _supabase.storage.from('category-images').upload(p,blob,{cacheControl:'604800',contentType:type||undefined}); if(error){alert('อัปโหลดไม่ได้');return;} url=_supabase.storage.from('category-images').getPublicUrl(p).data.publicUrl; }
     const d={name:document.getElementById('cat-name').value,department:document.getElementById('cat-dept').value,image_url:url};
     if(id) await _supabase.from('categories').update(d).eq('id',id); else await _supabase.from('categories').insert([d]); await refreshData(); closeCategoryModal();
 });
@@ -317,7 +354,7 @@ document.getElementById('tool-form').addEventListener('submit',async e=>{
     const tcKey=tc.toLowerCase();
     if(tools.some(t=>(t.tool_code||'').trim().toLowerCase()===tcKey&&t.id!=id)){alert('❌ รหัสซ้ำ');return;}
     const file=document.getElementById('tool-image-file').files[0]; let url=document.getElementById('tool-image-url').value;
-    if(file){ const {blob,ext,type}=await compressImage(file); const p=`${Date.now()}.${ext}`; const{error}=await _supabase.storage.from('tool-images').upload(p,blob,{cacheControl:'604800',contentType:type||undefined}); if(error){alert('อัปโหลดไม่ได้');return;} url=_supabase.storage.from('tool-images').getPublicUrl(p).data.publicUrl; }
+    if(file){ const {blob,ext,type}=await compressImage(file); const p=`${Date.now()}-opt.${ext}`; const{error}=await _supabase.storage.from('tool-images').upload(p,blob,{cacheControl:'604800',contentType:type||undefined}); if(error){alert('อัปโหลดไม่ได้');return;} url=_supabase.storage.from('tool-images').getPublicUrl(p).data.publicUrl; }
     const d={tool_code:tc,name:document.getElementById('tool-name').value,department:document.getElementById('tool-dept').value,category_id:document.getElementById('tool-category-id').value||null,image_url:url,total_stock:parseInt(document.getElementById('tool-total').value),available_stock:parseInt(document.getElementById('tool-available').value)};
     if(id) await _supabase.from('tools').update(d).eq('id',id); else await _supabase.from('tools').insert([d]); await refreshData(); closeToolModal();
 });
