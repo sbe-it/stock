@@ -73,10 +73,24 @@ document.addEventListener('DOMContentLoaded', async()=>{
     }
 });
 
+let refreshing=false, refreshQueued=false;
 async function refreshData() {
-    await Promise.all([fetchCategories(), fetchSites(), fetchTools(), fetchLogs(), fetchUsers()]);
-    updateStats(); render();
-    if(window.lucide) lucide.createIcons();
+    // กันการเรียกซ้อน: ถ้ากำลังโหลดอยู่ ให้จดไว้แล้วโหลดต่อรอบเดียว (กันยิง query ถี่จนค้าง)
+    if(refreshing){ refreshQueued=true; return; }
+    refreshing=true;
+    try{
+        await Promise.all([fetchCategories(), fetchSites(), fetchTools(), fetchLogs(), fetchUsers()]);
+        buildToolLocations();
+        updateStats(); render();
+        if(window.lucide) lucide.createIcons();
+    }catch(err){
+        console.error('โหลดข้อมูลไม่สำเร็จ:', err);
+        const c=document.getElementById('inventory-content');
+        if(c && !tools.length) c.innerHTML='<div class="glass-panel" style="padding:2rem;text-align:center;color:var(--warning);">⚠️ โหลดข้อมูลไม่สำเร็จ (เครือข่ายช้าหรือเซิร์ฟเวอร์ไม่ตอบ) <button class="btn-outline btn-sm" onclick="refreshData()">ลองใหม่</button></div>';
+    }finally{
+        refreshing=false;
+        if(refreshQueued){ refreshQueued=false; refreshData(); }
+    }
 }
 async function fetchCategories(){ const{data}=await _supabase.from('categories').select('*').order('name'); categories=data||[]; }
 async function fetchSites(){ const{data}=await _supabase.from('sites').select('*').order('name'); sites=data||[]; }
@@ -94,16 +108,24 @@ async function fetchLogs(){
     allLogs=data?data.map(l=>({...l, tool_name:l.tools?l.tools.name:'?', department:l.tools?l.tools.department:'-', site_name:l.sites?l.sites.name:'-'})):[];
 }
 
-// คำนวณว่าเครื่องมือแต่ละตัวอยู่ไซไหนบ้าง
-function getToolLocations(toolId) {
-    const map={};
-    allLogs.filter(l=>l.tool_id==toolId).forEach(l=>{
+// คำนวณ "เครื่องมือแต่ละตัวอยู่ไซไหนบ้าง" ครั้งเดียวต่อการโหลดข้อมูล
+// (เดิมคำนวณใหม่ทุกครั้งที่ render ทำให้ช้ามากเมื่อมีเครื่องมือ/ประวัติเยอะ)
+let toolLocCache=null;
+function buildToolLocations(){
+    const m={};
+    for(const l of allLogs){
+        const tid=l.tool_id; let g=m[tid]; if(!g){ g=m[tid]={}; }
         const k=l.site_id||'none', n=l.site_name||'ไม่ระบุ';
-        if(!map[k]) map[k]={name:n, qty:0, users:new Set()};
-        if(l.type==='BORROW'){ map[k].qty+=l.quantity; map[k].users.add(l.user_name); }
-        else{ map[k].qty-=l.quantity; }
-    });
-    return Object.values(map).filter(s=>s.qty>0).map(s=>({name:s.name,qty:s.qty,users:[...s.users]}));
+        let s=g[k]; if(!s){ s=g[k]={name:n, qty:0, users:new Set()}; }
+        if(l.type==='BORROW'){ s.qty+=l.quantity; s.users.add(l.user_name); }
+        else{ s.qty-=l.quantity; }
+    }
+    toolLocCache=m;
+}
+function getToolLocations(toolId) {
+    if(!toolLocCache) buildToolLocations();
+    const g=toolLocCache[toolId]; if(!g) return [];
+    return Object.values(g).filter(s=>s.qty>0).map(s=>({name:s.name,qty:s.qty,users:[...s.users]}));
 }
 
 function updateStats() {
@@ -137,7 +159,9 @@ window.switchDept = d => {
     currentDept=d;
     document.querySelectorAll('.dept-tab').forEach(t=>t.classList.remove('active'));
     document.getElementById('tab-'+d).classList.add('active');
-    refreshData();
+    // ข้อมูลทุกแผนกโหลดมาแล้ว แค่ render ใหม่ ไม่ต้องยิง query ซ้ำ (กันเซิร์ฟเวอร์โหลดหนักตอนหลายคนสลับแท็บ)
+    updateStats(); render();
+    if(window.lucide) lucide.createIcons();
 };
 window.toggleEl = (id,chId) => {
     const el=document.getElementById(id), ch=document.getElementById(chId), h=getComputedStyle(el).display==='none';
@@ -171,16 +195,19 @@ window.clearToolSearch=()=>{
 // ===== RENDER: INVENTORY =====
 function renderInventory() {
     const c=document.getElementById('inventory-content'); c.innerHTML='';
-    const cats=categories.filter(x=>x.department===currentDept);
-    if(!cats.length){ c.innerHTML='<div class="glass-panel" style="padding:2rem;text-align:center;color:var(--muted);">ไม่พบกลุ่มเครื่องมือ</div>'; return; }
+    // ขณะค้นหา: ค้นข้ามทุกแผนก (ไม่กรองตามแท็บที่เปิดอยู่) จะได้ไม่พลาดของที่อยู่อีกแผนก
+    const cats = searchTerm ? categories.slice() : categories.filter(x=>x.department===currentDept);
+    if(!cats.length && !searchTerm){ c.innerHTML='<div class="glass-panel" style="padding:2rem;text-align:center;color:var(--muted);">ไม่พบกลุ่มเครื่องมือ</div>'; return; }
     let shown=0;
     cats.forEach(cat=>{
         const ct=tools.filter(t=>t.category_id==cat.id && toolMatchesSearch(t,searchTerm)); if(!ct.length) return;
         shown+=ct.length;
         // ขณะค้นหา ให้เปิดกลุ่มที่มีผลลัพธ์ค้างไว้เลย จะได้เห็นทันทีไม่ต้องกดขยาย
         const openStyle = searchTerm ? 'style="display:block;"' : '', chevRot = searchTerm ? 'transform:rotate(180deg);' : '';
+        // ตอนค้นข้ามแผนก แสดงชื่อแผนกกำกับไว้ที่หัวกลุ่มด้วย
+        const deptTag = searchTerm ? ` <span style="font-size:0.78rem;color:var(--muted);font-weight:500;">· ${cat.department}</span>` : '';
         const d=document.createElement('div');
-        d.innerHTML=`<div class="glass-panel accordion-header" style="border-left:4px solid var(--primary);margin-bottom:4px;" onclick="toggleEl('ig-${cat.id}','ic-${cat.id}')"><span style="font-weight:700;">${cat.name} (${ct.length})</span><i data-lucide="chevron-down" id="ic-${cat.id}" style="width:16px;transition:0.3s;${chevRot}"></i></div><div id="ig-${cat.id}" class="accordion-body" ${openStyle}><div class="tools-grid" id="tg-${cat.id}"></div></div>`;
+        d.innerHTML=`<div class="glass-panel accordion-header" style="border-left:4px solid var(--primary);margin-bottom:4px;" onclick="toggleEl('ig-${cat.id}','ic-${cat.id}')"><span style="font-weight:700;">${cat.name} (${ct.length})${deptTag}</span><i data-lucide="chevron-down" id="ic-${cat.id}" style="width:16px;transition:0.3s;${chevRot}"></i></div><div id="ig-${cat.id}" class="accordion-body" ${openStyle}><div class="tools-grid" id="tg-${cat.id}"></div></div>`;
         c.appendChild(d);
         const grid=document.getElementById('tg-'+cat.id);
         ct.forEach(tool=>{
