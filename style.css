@@ -52,6 +52,11 @@ nav { display:flex; justify-content:space-between; align-items:center; padding:1
 .card-btns { position:absolute; top:8px; right:8px; display:flex; gap:4px; }
 .card-btn { padding:4px; border-radius:50%; width:28px; height:28px; background:rgba(0,0,0,0.5); border:1px solid var(--border); color:white; cursor:pointer; display:flex; align-items:center; justify-content:center; }
 
+/* SEARCH BAR */
+.search-bar { display:flex; gap:0.5rem; align-items:center; margin-bottom:1rem; }
+.search-bar input { flex:1; padding:0.7rem 1rem; border-radius:10px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.05); color:inherit; font-size:0.95rem; font-family:inherit; }
+.search-bar input:focus { outline:none; border-color:var(--primary); }
+
 /* ACCORDION */
 .accordion-header { padding:0.75rem 1.25rem; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
 .accordion-body { display:none; padding:0.5rem 0; }

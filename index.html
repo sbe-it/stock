@@ -60,6 +60,10 @@
                 <div class="glass-panel stat-card"><div class="stat-label">พร้อมใช้</div><div class="stat-value green" id="stat-available">0</div></div>
                 <div class="glass-panel stat-card"><div class="stat-label">เบิกออก</div><div class="stat-value orange" id="stat-borrowed">0</div></div>
             </div>
+            <div class="search-bar">
+                <input type="search" id="tool-search" placeholder="🔍 ค้นหาด้วยรหัส หรือ ชื่อเครื่องมือ..." autocomplete="off" oninput="onToolSearch(this.value)">
+                <button type="button" id="search-clear" class="btn-outline btn-sm" onclick="clearToolSearch()" style="display:none;">✕</button>
+            </div>
             <div id="inventory-content"></div>
         </div>
 

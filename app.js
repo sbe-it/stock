@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://yximjuyryktwkotlxiyr.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4aW1qdXlyeWt0d2tvdGx4aXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0OTI4MjMsImV4cCI6MjA5NDA2ODgyM30.cKwZVRLmOBYhX73KzrXkdVXAMGxFJ7jSX4bIApIB_7k';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-let categories=[], tools=[], sites=[], allLogs=[], currentView='inventory', currentDept='ช่างไฟ';
+let categories=[], tools=[], sites=[], allLogs=[], currentView='inventory', currentDept='ช่างไฟ', searchTerm='';
 
 // ===== AUTH =====
 // บัญชีเริ่มต้น (ใช้เป็น fallback กรณียังไม่ได้สร้างตาราง app_users ใน Supabase)
@@ -136,15 +136,43 @@ window.toggleEl = (id,chId) => {
     el.style.display=h?'block':'none'; if(ch) ch.style.transform=h?'rotate(180deg)':'rotate(0)';
 };
 
+// ===== ค้นหาเครื่องมือ =====
+// ทำให้ข้อความเทียบกันได้แบบไม่สนตัวพิมพ์เล็ก/ใหญ่ และรวมรูปสระ/วรรณยุกต์ไทยให้เป็นมาตรฐานเดียว (NFC)
+function normText(s){ return (s==null?'':String(s)).normalize('NFC').toLowerCase().trim(); }
+function toolMatchesSearch(tool, term){
+    if(!term) return true;
+    return normText(tool.tool_code).includes(term) || normText(tool.name).includes(term);
+}
+let searchTimer=null;
+window.onToolSearch=v=>{
+    document.getElementById('search-clear').style.display = v ? 'inline-flex' : 'none';
+    // debounce: รอให้พิมพ์เสร็จก่อนค่อย render กันการ render ถี่จนค้าง (รวมถึงตอนพิมพ์สระ/วรรณยุกต์ไทย)
+    clearTimeout(searchTimer);
+    searchTimer=setTimeout(()=>{
+        searchTerm=normText(v);
+        renderInventory();
+        if(window.lucide) lucide.createIcons();
+    },200);
+};
+window.clearToolSearch=()=>{
+    const inp=document.getElementById('tool-search');
+    inp.value=''; searchTerm=''; document.getElementById('search-clear').style.display='none';
+    renderInventory(); if(window.lucide) lucide.createIcons(); inp.focus();
+};
+
 // ===== RENDER: INVENTORY =====
 function renderInventory() {
     const c=document.getElementById('inventory-content'); c.innerHTML='';
     const cats=categories.filter(x=>x.department===currentDept);
     if(!cats.length){ c.innerHTML='<div class="glass-panel" style="padding:2rem;text-align:center;color:var(--muted);">ไม่พบกลุ่มเครื่องมือ</div>'; return; }
+    let shown=0;
     cats.forEach(cat=>{
-        const ct=tools.filter(t=>t.category_id==cat.id); if(!ct.length) return;
+        const ct=tools.filter(t=>t.category_id==cat.id && toolMatchesSearch(t,searchTerm)); if(!ct.length) return;
+        shown+=ct.length;
+        // ขณะค้นหา ให้เปิดกลุ่มที่มีผลลัพธ์ค้างไว้เลย จะได้เห็นทันทีไม่ต้องกดขยาย
+        const openStyle = searchTerm ? 'style="display:block;"' : '', chevRot = searchTerm ? 'transform:rotate(180deg);' : '';
         const d=document.createElement('div');
-        d.innerHTML=`<div class="glass-panel accordion-header" style="border-left:4px solid var(--primary);margin-bottom:4px;" onclick="toggleEl('ig-${cat.id}','ic-${cat.id}')"><span style="font-weight:700;">${cat.name} (${ct.length})</span><i data-lucide="chevron-down" id="ic-${cat.id}" style="width:16px;transition:0.3s;"></i></div><div id="ig-${cat.id}" class="accordion-body"><div class="tools-grid" id="tg-${cat.id}"></div></div>`;
+        d.innerHTML=`<div class="glass-panel accordion-header" style="border-left:4px solid var(--primary);margin-bottom:4px;" onclick="toggleEl('ig-${cat.id}','ic-${cat.id}')"><span style="font-weight:700;">${cat.name} (${ct.length})</span><i data-lucide="chevron-down" id="ic-${cat.id}" style="width:16px;transition:0.3s;${chevRot}"></i></div><div id="ig-${cat.id}" class="accordion-body" ${openStyle}><div class="tools-grid" id="tg-${cat.id}"></div></div>`;
         c.appendChild(d);
         const grid=document.getElementById('tg-'+cat.id);
         ct.forEach(tool=>{
@@ -156,6 +184,9 @@ function renderInventory() {
             grid.appendChild(card);
         });
     });
+    if(!shown){
+        c.innerHTML=`<div class="glass-panel" style="padding:2rem;text-align:center;color:var(--muted);">${searchTerm?`ไม่พบเครื่องมือที่ตรงกับ "${document.getElementById('tool-search').value}"`:'ยังไม่มีเครื่องมือในแผนกนี้'}</div>`;
+    }
 }
 
 // ===== RENDER: SITES =====
@@ -284,19 +315,37 @@ window.openActionModal=(id,type)=>{
     const sg=document.getElementById('site-selection-group'), ss=document.getElementById('action-site-id');
     if(type==='BORROW'){ sg.style.display='block'; ss.innerHTML='<option value="">-- เลือกไซงาน --</option>'; sites.forEach(s=>ss.innerHTML+=`<option value="${s.id}">${s.name}</option>`); }
     else { sg.style.display='none'; ss.value=''; }
+    // จำกัดจำนวนสูงสุดที่เบิกได้ = ของที่เหลือจริง (กันการพิมพ์เกิน)
+    const qtyInput=document.getElementById('quantity');
+    if(type==='BORROW'){ qtyInput.max=t.available_stock; } else { qtyInput.removeAttribute('max'); }
     document.getElementById('action-modal').style.display='flex';
 };
 window.closeActionModal=()=>document.getElementById('action-modal').style.display='none';
+let actionSubmitting=false; // กันการกดยืนยันซ้ำ (double-submit)
 document.getElementById('action-form').addEventListener('submit',async e=>{
     e.preventDefault(); if(!isAdmin())return;
+    if(actionSubmitting) return; // กำลังทำรายการอยู่ ห้ามกดซ้ำ
     const id=document.getElementById('action-tool-id').value, type=document.getElementById('action-type').value;
     const siteId=document.getElementById('action-site-id').value||null, un=document.getElementById('user-name').value;
     const t=tools.find(x=>x.id==id), qty=parseInt(document.getElementById('quantity').value);
-    let ns=type==='BORROW'?t.available_stock-qty:t.available_stock+qty;
-    if(ns<0||ns>t.total_stock) return alert('จำนวนไม่ถูกต้อง');
-    await _supabase.from('tools').update({available_stock:ns}).eq('id',id);
-    await _supabase.from('transactions').insert([{tool_id:id,site_id:type==='BORROW'?siteId:null,user_name:un,receiver_name:document.getElementById('receiver-name').value,type,quantity:qty}]);
-    await refreshData(); closeActionModal();
+    if(!Number.isInteger(qty)||qty<1) return alert('จำนวนไม่ถูกต้อง');
+    const submitBtn=e.submitter||document.querySelector('#action-form button[type="submit"]');
+    actionSubmitting=true; if(submitBtn) submitBtn.disabled=true;
+    try{
+        // อ่านค่าคงเหลือล่าสุดจากฐานข้อมูล (กันค่าใน cache ไม่ตรงกับของจริง)
+        const{data:fresh,error:fErr}=await _supabase.from('tools').select('available_stock,total_stock').eq('id',id).single();
+        if(fErr||!fresh){ alert('ดึงข้อมูลล่าสุดไม่ได้ ลองใหม่อีกครั้ง'); return; }
+        const cur=fresh.available_stock, ns=type==='BORROW'?cur-qty:cur+qty;
+        if(ns<0||ns>fresh.total_stock){ alert(type==='BORROW'?`เบิกได้ไม่เกิน ${cur} ชิ้น (ของเหลือจริง)`:'จำนวนคืนเกินกว่าที่เบิกออก'); return; }
+        // อัปเดตแบบมีเงื่อนไข: เขียนได้ก็ต่อเมื่อค่าคงเหลือยังเท่ากับที่เราเพิ่งอ่าน (optimistic lock)
+        const{data:updated,error:uErr}=await _supabase.from('tools')
+            .update({available_stock:ns}).eq('id',id).eq('available_stock',cur).select();
+        if(uErr||!updated||!updated.length){ alert('มีคนทำรายการนี้ไปก่อนแล้ว กรุณาลองใหม่'); await refreshData(); return; }
+        await _supabase.from('transactions').insert([{tool_id:id,site_id:type==='BORROW'?siteId:null,user_name:un,receiver_name:document.getElementById('receiver-name').value,type,quantity:qty}]);
+        await refreshData(); closeActionModal();
+    } finally {
+        actionSubmitting=false; if(submitBtn) submitBtn.disabled=false;
+    }
 });
 
 // History
