@@ -80,7 +80,15 @@ async function refreshData() {
 }
 async function fetchCategories(){ const{data}=await _supabase.from('categories').select('*').order('name'); categories=data||[]; }
 async function fetchSites(){ const{data}=await _supabase.from('sites').select('*').order('name'); sites=data||[]; }
-async function fetchTools(){ const{data}=await _supabase.from('tools').select('*, categories(name)').order('tool_code',{ascending:true}); tools=(data||[]).sort((a,b)=>(a.tool_code||'').localeCompare(b.tool_code||'','th',{numeric:true})); }
+async function fetchTools(){
+    const{data}=await _supabase.from('tools').select('*, categories(name)').order('tool_code',{ascending:true});
+    let list=data||[];
+    // กันการ์ดซ้ำ: ถ้ามีหลายแถวรหัสเดียวกัน (ไม่สนพิมพ์เล็ก/ใหญ่/ช่องว่าง) แสดงแค่ใบเดียว
+    const seen=new Map(), dups=[];
+    list=list.filter(t=>{ const k=(t.tool_code||'').trim().toLowerCase(); if(!k) return true; if(seen.has(k)){ dups.push(t.tool_code); return false; } seen.set(k,t.id); return true; });
+    if(dups.length) console.warn('พบรหัสเครื่องมือซ้ำในฐานข้อมูล (แสดงใบเดียว) — ควรลบตัวซ้ำออก:', dups);
+    tools=list.sort((a,b)=>(a.tool_code||'').localeCompare(b.tool_code||'','th',{numeric:true}));
+}
 async function fetchLogs(){
     const{data}=await _supabase.from('transactions').select('*, tools(name,department), sites(name)').order('timestamp',{ascending:false}).limit(500);
     allLogs=data?data.map(l=>({...l, tool_name:l.tools?l.tools.name:'?', department:l.tools?l.tools.department:'-', site_name:l.sites?l.sites.name:'-'})):[];
@@ -258,7 +266,9 @@ window.updateToolCatList=()=>{ const d=document.getElementById('tool-dept').valu
 window.closeToolModal=()=>document.getElementById('tool-modal').style.display='none';
 document.getElementById('tool-form').addEventListener('submit',async e=>{
     e.preventDefault(); if(!isAdmin())return; const id=document.getElementById('edit-tool-id').value, tc=document.getElementById('tool-code').value.trim();
-    if(tools.some(t=>t.tool_code===tc&&t.id!=id)){alert('❌ รหัสซ้ำ');return;}
+    // เทียบรหัสซ้ำแบบไม่สนตัวพิมพ์เล็ก/ใหญ่และช่องว่าง กันรหัสซ้ำเล็ดลอด (เช่น "md003" กับ "MD003")
+    const tcKey=tc.toLowerCase();
+    if(tools.some(t=>(t.tool_code||'').trim().toLowerCase()===tcKey&&t.id!=id)){alert('❌ รหัสซ้ำ');return;}
     const file=document.getElementById('tool-image-file').files[0]; let url=document.getElementById('tool-image-url').value;
     if(file){ const p=`${Date.now()}.${file.name.split('.').pop()}`; const{error}=await _supabase.storage.from('tool-images').upload(p,file); if(error){alert('อัปโหลดไม่ได้');return;} url=_supabase.storage.from('tool-images').getPublicUrl(p).data.publicUrl; }
     const d={tool_code:tc,name:document.getElementById('tool-name').value,department:document.getElementById('tool-dept').value,category_id:document.getElementById('tool-category-id').value||null,image_url:url,total_stock:parseInt(document.getElementById('tool-total').value),available_stock:parseInt(document.getElementById('tool-available').value)};
