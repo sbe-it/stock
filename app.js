@@ -1,7 +1,7 @@
 const SUPABASE_URL = 'https://yximjuyryktwkotlxiyr.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl4aW1qdXlyeWt0d2tvdGx4aXlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0OTI4MjMsImV4cCI6MjA5NDA2ODgyM30.cKwZVRLmOBYhX73KzrXkdVXAMGxFJ7jSX4bIApIB_7k';
 const _supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-let categories=[], tools=[], sites=[], allLogs=[], currentView='inventory', currentDept='ช่างไฟ', searchTerm='';
+let categories=[], tools=[], sites=[], allLogs=[], repairs=[], currentView='inventory', currentDept='ช่างไฟ', searchTerm='';
 
 // ===== AUTH =====
 // บัญชีเริ่มต้น (ใช้เป็น fallback กรณียังไม่ได้สร้างตาราง app_users ใน Supabase)
@@ -11,6 +11,7 @@ const DEFAULT_ACCOUNTS = [
 ];
 let appUsers = [];        // รายชื่อผู้ใช้ที่ใช้ตรวจ login (จากฐานข้อมูลหรือ fallback)
 let usersTableReady = false; // true เมื่อโหลดจากตาราง app_users สำเร็จ
+let repairsTableReady = false; // true เมื่อโหลดจากตาราง repairs สำเร็จ (ต้องรัน add-repairs-system.sql ก่อน)
 let currentUser = null;
 const isAdmin = () => currentUser && currentUser.role === 'admin';
 
@@ -33,8 +34,8 @@ function applyRoleUI(){
     document.body.classList.toggle('role-admin', admin);
     const badge = document.getElementById('user-badge');
     if(badge && currentUser) badge.textContent = `${currentUser.name} (${admin?'แอดมิน':'ดูอย่างเดียว'})`;
-    // ถ้า user อยู่หน้าจัดการ ให้เด้งกลับหน้าคลัง
-    if(!admin && currentView==='management') switchView('inventory');
+    // ถ้า user อยู่หน้าจัดการ/งานซ่อม ให้เด้งกลับหน้าคลัง
+    if(!admin && (currentView==='management'||currentView==='repairs')) switchView('inventory');
 }
 
 function showLogin(){ document.getElementById('login-overlay').style.display='flex'; }
@@ -79,7 +80,7 @@ async function refreshData() {
     if(refreshing){ refreshQueued=true; return; }
     refreshing=true;
     try{
-        await Promise.all([fetchCategories(), fetchSites(), fetchTools(), fetchLogs(), fetchUsers()]);
+        await Promise.all([fetchCategories(), fetchSites(), fetchTools(), fetchLogs(), fetchUsers(), fetchRepairs()]);
         buildToolLocations();
         updateStats(); render();
         if(window.lucide) lucide.createIcons();
@@ -107,6 +108,12 @@ async function fetchTools(){
 async function fetchLogs(){
     const{data}=await _supabase.from('transactions').select('*, tools(name,department), sites(name)').order('timestamp',{ascending:false}).limit(500);
     allLogs=data?data.map(l=>({...l, tool_name:l.tools?l.tools.name:'?', department:l.tools?l.tools.department:'-', site_name:l.sites?l.sites.name:'-'})):[];
+}
+async function fetchRepairs(){
+    const{data,error}=await _supabase.from('repairs').select('*, tools(name,tool_code,department)').order('created_at',{ascending:false});
+    if(error){ repairsTableReady=false; repairs=[]; return; }
+    repairsTableReady=true;
+    repairs=data?data.map(r=>({...r, tool_name:r.tools?r.tools.name:'?', tool_code:r.tools?r.tools.tool_code:'-', department:r.tools?r.tools.department:'-'})):[];
 }
 
 // คำนวณ "เครื่องมือแต่ละตัวอยู่ไซไหนบ้าง" ครั้งเดียวต่อการโหลดข้อมูล
@@ -139,21 +146,29 @@ function updateStats() {
 }
 
 function render() {
+    updateRepairsNavBadge();
     if(currentView==='inventory') renderInventory();
     else if(currentView==='sites') renderSites();
     else renderMgmt();
     if(window.lucide) lucide.createIcons();
 }
+function updateRepairsNavBadge(){
+    const navBadge=document.getElementById('nav-repairs-count'); if(!navBadge) return;
+    const pendingCount=repairs.filter(r=>r.status==='pending').length;
+    if(pendingCount){ navBadge.textContent=pendingCount; navBadge.style.display='inline-block'; } else navBadge.style.display='none';
+}
 
 // ===== VIEW SWITCHING =====
-const viewNavMap = {inventory:'nav-inventory', sites:'nav-sites', management:'nav-mgmt'};
+const viewNavMap = {inventory:'nav-inventory', sites:'nav-sites', management:'nav-mgmt', repairs:'nav-repairs'};
 window.switchView = v => {
-    if(v==='management' && !isAdmin()) v='inventory';
+    if((v==='management'||v==='repairs') && !isAdmin()) v='inventory';
     currentView=v;
-    ['inventory','sites','management'].forEach(id=>{
+    ['inventory','sites','management','repairs'].forEach(id=>{
         document.getElementById('view-'+id).style.display=id===v?'block':'none';
         document.getElementById(viewNavMap[id]).classList.toggle('active',id===v);
     });
+    const deptTabs=document.querySelector('.dept-tabs');
+    if(deptTabs) deptTabs.style.display=(v==='inventory'||v==='sites')?'flex':'none';
     render();
 };
 window.switchDept = d => {
@@ -213,10 +228,13 @@ function renderInventory() {
         const grid=document.getElementById('tg-'+cat.id);
         ct.forEach(tool=>{
             const oos=tool.available_stock<=0, locs=getToolLocations(tool.id);
+            const repairing=tool.status==='repairing';
             let locHtml='';
-            if(locs.length) locHtml='<div class="card-badges">'+locs.map(l=>`<span class="badge badge-site">📍 ${l.name} (${l.qty})</span><span class="badge badge-user">👤 ${l.users.join(', ')}</span>`).join('')+'</div>';
-            const card=document.createElement('div'); card.className='glass-panel tool-card';
-            card.innerHTML=`<div class="card-btns"><button class="card-btn" onclick="event.stopPropagation();openLocationModal(${tool.id})" title="ดูสถานที่">📍</button><button class="card-btn" onclick="event.stopPropagation();openHistoryModal(${tool.id})" title="ดูประวัติ">🕐</button></div><img src="${tool.image_url||'https://images.unsplash.com/photo-1530124560676-587cabee147a?q=80&w=400'}" class="tool-image" loading="lazy" decoding="async"><div class="tool-info"><div style="font-size:0.7rem;color:var(--primary);font-weight:800;">${tool.tool_code||'NO-CODE'}</div><div class="tool-name">${tool.name}</div><div class="tool-meta"><span class="badge-stock ${oos?'badge-out':'badge-ok'}">${oos?'เบิกหมด':'คงเหลือ '+tool.available_stock}</span><span style="color:var(--muted)">/ ${tool.total_stock}</span></div>${locHtml}</div><div class="tool-actions"><button class="btn-primary" onclick="openActionModal(${tool.id},'BORROW')" ${oos?'disabled':''}>เบิก</button><button class="btn-outline" onclick="openActionModal(${tool.id},'RETURN')">คืน</button></div>`;
+            if(locs.length) locHtml='<div class="card-badges">'+locs.map(l=>`<span class="badge badge-site"><i data-lucide="map-pin"></i> ${l.name} (${l.qty})</span><span class="badge badge-user"><i data-lucide="user"></i> ${l.users.join(', ')}</span>`).join('')+'</div>';
+            const card=document.createElement('div'); card.className='glass-panel tool-card'+(repairing?' tool-card-repairing':'');
+            const stockBadge=repairing?`<span class="badge-stock badge-repair"><i data-lucide="wrench"></i> กำลังซ่อม</span>`:`<span class="badge-stock ${oos?'badge-out':'badge-ok'}">${oos?'เบิกหมด':'คงเหลือ '+tool.available_stock}</span>`;
+            const borrowBtn=repairing?`<button class="btn-primary" disabled title="กำลังซ่อมอยู่ เบิกไม่ได้">ซ่อมอยู่</button>`:`<button class="btn-primary" onclick="openActionModal(${tool.id},'BORROW')" ${oos?'disabled':''}>เบิก</button>`;
+            card.innerHTML=`<div class="card-btns"><button class="card-btn" onclick="event.stopPropagation();openRepairModal(${tool.id})" title="แจ้งซ่อม"><i data-lucide="wrench"></i></button><button class="card-btn" onclick="event.stopPropagation();openLocationModal(${tool.id})" title="ดูสถานที่"><i data-lucide="map-pin"></i></button><button class="card-btn" onclick="event.stopPropagation();openHistoryModal(${tool.id})" title="ดูประวัติ"><i data-lucide="history"></i></button></div><img src="${tool.image_url||'https://images.unsplash.com/photo-1530124560676-587cabee147a?q=80&w=400'}" class="tool-image" loading="lazy" decoding="async"><div class="tool-info"><div style="font-size:0.7rem;color:var(--primary);font-weight:800;">${tool.tool_code||'NO-CODE'}</div><div class="tool-name">${tool.name}</div><div class="tool-meta">${stockBadge}<span style="color:var(--muted)">/ ${tool.total_stock}</span></div>${locHtml}</div><div class="tool-actions">${borrowBtn}<button class="btn-outline" onclick="openActionModal(${tool.id},'RETURN')">คืน</button></div>`;
             grid.appendChild(card);
         });
     });
@@ -246,26 +264,48 @@ function renderSites() {
 function renderMgmt() {
     // Sites
     const sb=document.getElementById('mgmt-sites-body'); sb.innerHTML='';
-    sites.forEach(s=>{ sb.innerHTML+=`<tr><td><b>${s.name}</b></td><td style="text-align:right;"><button class="btn-outline btn-sm" onclick="openSiteModal(${s.id})">✏️</button> <button class="btn-outline btn-sm btn-danger" onclick="deleteSite(${s.id})">🗑️</button></td></tr>`; });
+    sites.forEach(s=>{ sb.innerHTML+=`<tr><td><b>${s.name}</b></td><td style="text-align:right;"><button class="btn-outline btn-sm" onclick="openSiteModal(${s.id})"><i data-lucide="pencil"></i></button> <button class="btn-outline btn-sm btn-danger" onclick="deleteSite(${s.id})"><i data-lucide="trash-2"></i></button></td></tr>`; });
     // Categories
     const cb=document.getElementById('mgmt-cats-body'); cb.innerHTML='';
-    categories.forEach(c=>{ cb.innerHTML+=`<tr><td><b>${c.name}</b></td><td><span class="badge-stock badge-ok">${c.department}</span></td><td style="text-align:right;"><button class="btn-outline btn-sm" onclick="openCategoryModal(${c.id})">✏️</button> <button class="btn-outline btn-sm btn-danger" onclick="deleteCategory(${c.id})">🗑️</button></td></tr>`; });
+    categories.forEach(c=>{ cb.innerHTML+=`<tr><td><b>${c.name}</b></td><td><span class="badge-stock badge-ok">${c.department}</span></td><td style="text-align:right;"><button class="btn-outline btn-sm" onclick="openCategoryModal(${c.id})"><i data-lucide="pencil"></i></button> <button class="btn-outline btn-sm btn-danger" onclick="deleteCategory(${c.id})"><i data-lucide="trash-2"></i></button></td></tr>`; });
     // Tools
     const tb=document.getElementById('mgmt-tools-body'); tb.innerHTML='';
     tools.forEach(t=>{
         const locs=getToolLocations(t.id);
         const locStr=locs.length?locs.map(l=>`${l.name}(${l.qty})`).join(', '):'ในคลัง';
-        tb.innerHTML+=`<tr><td><img src="${t.image_url||''}" loading="lazy" decoding="async" style="width:28px;height:28px;border-radius:4px;"></td><td style="font-family:monospace;font-weight:700;">${t.tool_code||'-'}</td><td style="font-weight:600;">${t.name}</td><td><span class="badge-stock badge-ok" style="font-size:0.7rem;">${t.department}</span></td><td>${t.total_stock}</td><td>${t.available_stock}</td><td style="font-size:0.7rem;max-width:150px;color:var(--muted);">${locStr}</td><td style="text-align:right;white-space:nowrap;"><button class="btn-outline btn-sm" onclick="openLocationModal(${t.id})">📍</button> <button class="btn-outline btn-sm" onclick="openToolModal(${t.id})">✏️</button> <button class="btn-outline btn-sm btn-danger" onclick="deleteTool(${t.id})">🗑️</button></td></tr>`;
+        const repairing=t.status==='repairing';
+        const statusBadge=repairing?'<span class="badge-stock badge-repair"><i data-lucide="wrench"></i> กำลังซ่อม</span>':'<span class="badge-stock badge-ok">ปกติ</span>';
+        tb.innerHTML+=`<tr><td><img src="${t.image_url||''}" loading="lazy" decoding="async" style="width:28px;height:28px;border-radius:4px;"></td><td style="font-family:monospace;font-weight:700;">${t.tool_code||'-'}</td><td style="font-weight:600;">${t.name}</td><td><span class="badge-stock badge-ok" style="font-size:0.7rem;">${t.department}</span></td><td>${t.total_stock}</td><td>${t.available_stock}</td><td>${statusBadge}</td><td style="font-size:0.7rem;max-width:150px;color:var(--muted);">${locStr}</td><td style="text-align:right;white-space:nowrap;"><button class="btn-outline btn-sm" onclick="toggleToolStatus(${t.id})" title="${repairing?'ปลดสถานะซ่อม':'ตั้งเป็นกำลังซ่อม'}">${repairing?'<i data-lucide="check"></i>':'<i data-lucide="wrench"></i>'}</button> <button class="btn-outline btn-sm" onclick="openLocationModal(${t.id})"><i data-lucide="map-pin"></i></button> <button class="btn-outline btn-sm" onclick="openToolModal(${t.id})"><i data-lucide="pencil"></i></button> <button class="btn-outline btn-sm btn-danger" onclick="deleteTool(${t.id})"><i data-lucide="trash-2"></i></button></td></tr>`;
     });
     // Users
     const ub=document.getElementById('mgmt-users-body'); if(ub){ ub.innerHTML='';
         if(!usersTableReady){
-            ub.innerHTML=`<tr><td colspan="4" style="color:var(--warning);padding:1rem;font-size:0.85rem;">⚠️ ยังไม่ได้สร้างตาราง <b>app_users</b> ในฐานข้อมูล จึงยังเพิ่ม/ลบผู้ใช้ถาวรไม่ได้ (ตอนนี้ใช้บัญชีเริ่มต้น admin/user) — รัน SQL ในไฟล์ <b>add-users-table.sql</b> ที่ Supabase ก่อน</td></tr>`;
+            ub.innerHTML=`<tr><td colspan="4" style="color:var(--warning);padding:1rem;font-size:0.85rem;"><i data-lucide="alert-triangle" style="vertical-align:-3px;"></i> ยังไม่ได้สร้างตาราง <b>app_users</b> ในฐานข้อมูล จึงยังเพิ่ม/ลบผู้ใช้ถาวรไม่ได้ (ตอนนี้ใช้บัญชีเริ่มต้น admin/user) — รัน SQL ในไฟล์ <b>add-users-table.sql</b> ที่ Supabase ก่อน</td></tr>`;
         } else if(!appUsers.length){
             ub.innerHTML=`<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:1rem;">ยังไม่มีผู้ใช้</td></tr>`;
         } else appUsers.forEach(u=>{
             const isMe=currentUser&&u.username===currentUser.username;
-            ub.innerHTML+=`<tr><td style="font-family:monospace;font-weight:700;">${u.username}${isMe?' <span style="color:var(--muted);font-weight:400;">(คุณ)</span>':''}</td><td>${u.name||'-'}</td><td><span class="badge-stock ${u.role==='admin'?'badge-out':'badge-ok'}" style="font-size:0.7rem;">${u.role==='admin'?'แอดมิน':'ดูอย่างเดียว'}</span></td><td style="text-align:right;white-space:nowrap;"><button class="btn-outline btn-sm" onclick="openUserModal(${u.id})">✏️</button> <button class="btn-outline btn-sm btn-danger" onclick="deleteUser(${u.id})">🗑️</button></td></tr>`;
+            ub.innerHTML+=`<tr><td style="font-family:monospace;font-weight:700;">${u.username}${isMe?' <span style="color:var(--muted);font-weight:400;">(คุณ)</span>':''}</td><td>${u.name||'-'}</td><td><span class="badge-stock ${u.role==='admin'?'badge-out':'badge-ok'}" style="font-size:0.7rem;">${u.role==='admin'?'แอดมิน':'ดูอย่างเดียว'}</span></td><td style="text-align:right;white-space:nowrap;"><button class="btn-outline btn-sm" onclick="openUserModal(${u.id})"><i data-lucide="pencil"></i></button> <button class="btn-outline btn-sm btn-danger" onclick="deleteUser(${u.id})"><i data-lucide="trash-2"></i></button></td></tr>`;
+        });
+    }
+    // Repairs
+    const rb=document.getElementById('mgmt-repairs-body'); const pendingBadge=document.getElementById('repairs-pending-count');
+    if(rb){ rb.innerHTML='';
+        const pendingCount=repairs.filter(r=>r.status==='pending').length;
+        if(pendingBadge){ if(pendingCount){ pendingBadge.textContent=`${pendingCount} รอดำเนินการ`; pendingBadge.style.display='inline-block'; } else pendingBadge.style.display='none'; }
+        if(!repairsTableReady){
+            rb.innerHTML=`<tr><td colspan="7" style="color:var(--warning);padding:1rem;font-size:0.85rem;"><i data-lucide="alert-triangle" style="vertical-align:-3px;"></i> ยังไม่ได้สร้างตาราง <b>repairs</b> ในฐานข้อมูล จึงยังใช้ระบบแจ้งซ่อมไม่ได้ — รัน SQL ในไฟล์ <b>add-repairs-system.sql</b> ที่ Supabase ก่อน (และสร้าง bucket "repair-images" แบบ Public)</td></tr>`;
+        } else if(!repairs.length){
+            rb.innerHTML=`<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1rem;">ยังไม่มีใบแจ้งซ่อม</td></tr>`;
+        } else repairs.forEach(r=>{
+            const statusMap={pending:['badge-out','รอดำเนินการ'],repairing:['badge-repair','<i data-lucide="wrench"></i> กำลังซ่อม'],done:['badge-ok','<i data-lucide="check"></i> ซ่อมเสร็จ'],rejected:['badge-out','ปฏิเสธ']};
+            const[badgeCls,badgeTxt]=statusMap[r.status]||['badge-ok',r.status];
+            const imgHtml=r.image_url?`<a href="${r.image_url}" target="_blank" rel="noopener"><img src="${r.image_url}" loading="lazy" decoding="async" style="width:36px;height:36px;border-radius:4px;object-fit:cover;"></a>`:'-';
+            let actions='';
+            if(r.status==='pending') actions=`<button class="btn-primary btn-sm" onclick="startRepair(${r.id})">เริ่มซ่อม</button> <button class="btn-outline btn-sm btn-danger" onclick="rejectRepair(${r.id})">ปฏิเสธ</button>`;
+            else if(r.status==='repairing') actions=`<button class="btn-primary btn-sm" onclick="completeRepair(${r.id})">ซ่อมเสร็จ</button>`;
+            else actions=`<button class="btn-outline btn-sm btn-danger" onclick="deleteRepair(${r.id})"><i data-lucide="trash-2"></i></button>`;
+            rb.innerHTML+=`<tr><td style="font-weight:600;">${r.tool_name}<br><span style="font-family:monospace;font-size:0.7rem;color:var(--muted);">${r.tool_code}</span></td><td>${r.reported_by}</td><td style="max-width:220px;font-size:0.8rem;">${r.issue}</td><td>${imgHtml}</td><td><span class="badge-stock ${badgeCls}" style="font-size:0.7rem;">${badgeTxt}</span></td><td style="font-size:0.75rem;color:var(--muted);white-space:nowrap;">${new Date(r.created_at).toLocaleString()}</td><td style="text-align:right;white-space:nowrap;">${actions}</td></tr>`;
         });
     }
 }
@@ -400,6 +440,7 @@ window.deleteUser=async id=>{
 window.openActionModal=(id,type)=>{
     if(!isAdmin())return;
     const t=tools.find(x=>x.id==id);
+    if(type==='BORROW' && t.status==='repairing'){ alert('🛠️ เครื่องมือนี้กำลังซ่อมอยู่ เบิกไม่ได้'); return; }
     document.getElementById('action-form').reset();
     document.getElementById('action-tool-id').value=id; document.getElementById('action-type').value=type;
     document.getElementById('modal-tool-name').value=t.name;
@@ -441,8 +482,9 @@ document.getElementById('action-form').addEventListener('submit',async e=>{
     actionSubmitting=true; if(submitBtn) submitBtn.disabled=true;
     try{
         // อ่านค่าคงเหลือล่าสุดจากฐานข้อมูล (กันค่าใน cache ไม่ตรงกับของจริง)
-        const{data:fresh,error:fErr}=await _supabase.from('tools').select('available_stock,total_stock').eq('id',id).single();
+        const{data:fresh,error:fErr}=await _supabase.from('tools').select('available_stock,total_stock,status').eq('id',id).single();
         if(fErr||!fresh){ alert('ดึงข้อมูลล่าสุดไม่ได้ ลองใหม่อีกครั้ง'); return; }
+        if(type==='BORROW' && fresh.status==='repairing'){ alert('🛠️ เครื่องมือนี้กำลังซ่อมอยู่ เบิกไม่ได้'); await refreshData(); return; }
         const cur=fresh.available_stock, ns=type==='BORROW'?cur-qty:cur+qty;
         if(ns<0||ns>fresh.total_stock){ alert(type==='BORROW'?`เบิกได้ไม่เกิน ${cur} ชิ้น (ของเหลือจริง)`:'จำนวนคืนเกินกว่าที่เบิกออก'); return; }
         // อัปเดตแบบมีเงื่อนไข: เขียนได้ก็ต่อเมื่อค่าคงเหลือยังเท่ากับที่เราเพิ่งอ่าน (optimistic lock)
@@ -481,3 +523,84 @@ window.openLocationModal=id=>{
     document.getElementById('location-modal').style.display='flex';
 };
 window.closeLocationModal=()=>document.getElementById('location-modal').style.display='none';
+
+// ===== แจ้งซ่อม =====
+window.openRepairModal=id=>{
+    if(!repairsTableReady){ alert('⚠️ ยังเปิดใช้งานระบบแจ้งซ่อมไม่ได้ ต้องรัน SQL ในไฟล์ add-repairs-system.sql ที่ Supabase ก่อน'); return; }
+    const t=tools.find(x=>x.id==id);
+    if(t.status==='repairing'){ alert('🛠️ เครื่องมือนี้มีใบแจ้งซ่อมที่กำลังดำเนินการอยู่แล้ว'); return; }
+    document.getElementById('repair-form').reset();
+    document.getElementById('repair-tool-id').value=id;
+    document.getElementById('repair-tool-name').value=t.name;
+    document.getElementById('repair-modal').style.display='flex';
+};
+window.closeRepairModal=()=>document.getElementById('repair-modal').style.display='none';
+let repairSubmitting=false;
+document.getElementById('repair-form').addEventListener('submit',async e=>{
+    e.preventDefault(); if(repairSubmitting) return;
+    const id=document.getElementById('repair-tool-id').value;
+    const issue=document.getElementById('repair-issue').value.trim();
+    const file=document.getElementById('repair-image-file').files[0];
+    const submitBtn=e.submitter||document.querySelector('#repair-form button[type="submit"]');
+    repairSubmitting=true; if(submitBtn) submitBtn.disabled=true;
+    try{
+        let imageUrl=null;
+        if(file){
+            const {blob,ext,type}=await compressImage(file);
+            const p=`${Date.now()}-opt.${ext}`;
+            const{error}=await _supabase.storage.from('repair-images').upload(p,blob,{cacheControl:'604800',contentType:type||undefined});
+            if(error){ alert('อัปโหลดรูปไม่ได้: '+error.message); return; }
+            imageUrl=_supabase.storage.from('repair-images').getPublicUrl(p).data.publicUrl;
+        }
+        const{error:iErr}=await _supabase.from('repairs').insert([{
+            tool_id:id, reported_by:currentUser.name, issue, image_url:imageUrl, status:'pending'
+        }]);
+        if(iErr){ alert('ส่งใบแจ้งซ่อมไม่สำเร็จ: '+iErr.message); return; }
+        await refreshData(); closeRepairModal();
+        alert('✅ ส่งใบแจ้งซ่อมเรียบร้อย รอแอดมินตรวจสอบ');
+    } finally {
+        repairSubmitting=false; if(submitBtn) submitBtn.disabled=false;
+    }
+});
+
+// แอดมิน: เริ่มซ่อม (อนุมัติใบแจ้ง -> ล็อกเครื่องมือเป็น "กำลังซ่อม")
+window.startRepair=async repairId=>{
+    if(!isAdmin())return;
+    const r=repairs.find(x=>x.id==repairId); if(!r)return;
+    if(!confirm(`ยืนยันเริ่มซ่อม "${r.tool_name}"? เครื่องมือนี้จะถูกล็อกไม่ให้เบิกจนกว่าจะซ่อมเสร็จ`))return;
+    await _supabase.from('tools').update({status:'repairing'}).eq('id',r.tool_id);
+    await _supabase.from('repairs').update({status:'repairing',updated_at:new Date().toISOString()}).eq('id',repairId);
+    await refreshData();
+};
+// แอดมิน: ปฏิเสธใบแจ้งซ่อม (ไม่ล็อกเครื่องมือ)
+window.rejectRepair=async repairId=>{
+    if(!isAdmin())return;
+    if(!confirm('ปฏิเสธใบแจ้งซ่อมนี้?'))return;
+    await _supabase.from('repairs').update({status:'rejected',resolved_by:currentUser.name,updated_at:new Date().toISOString()}).eq('id',repairId);
+    await refreshData();
+};
+// แอดมิน: ปิดงานซ่อม (เครื่องมือกลับมาใช้งานได้)
+window.completeRepair=async repairId=>{
+    if(!isAdmin())return;
+    const r=repairs.find(x=>x.id==repairId); if(!r)return;
+    if(!confirm(`ยืนยันว่าซ่อม "${r.tool_name}" เสร็จแล้ว? เครื่องมือจะกลับมาเบิกได้ตามปกติ`))return;
+    await _supabase.from('tools').update({status:'normal'}).eq('id',r.tool_id);
+    await _supabase.from('repairs').update({status:'done',resolved_by:currentUser.name,updated_at:new Date().toISOString()}).eq('id',repairId);
+    await refreshData();
+};
+// แอดมิน: ลบใบแจ้งซ่อมที่จบงานแล้วออกจากรายการ
+window.deleteRepair=async repairId=>{
+    if(!isAdmin())return;
+    if(!confirm('ลบใบแจ้งซ่อมนี้ออกจากรายการ?'))return;
+    await _supabase.from('repairs').delete().eq('id',repairId);
+    await refreshData();
+};
+// แอดมิน: สลับสถานะเครื่องมือด้วยตนเอง (เผื่อกรณีไม่ได้มาจากใบแจ้งซ่อม)
+window.toggleToolStatus=async toolId=>{
+    if(!isAdmin())return;
+    const t=tools.find(x=>x.id==toolId); if(!t)return;
+    const ns=t.status==='repairing'?'normal':'repairing';
+    if(!confirm(ns==='repairing'?`ตั้ง "${t.name}" เป็น "กำลังซ่อม"? จะเบิกไม่ได้จนกว่าจะปลดสถานะ`:`ปลดสถานะ "ซ่อม" ของ "${t.name}" กลับเป็นปกติ?`))return;
+    await _supabase.from('tools').update({status:ns}).eq('id',toolId);
+    await refreshData();
+};

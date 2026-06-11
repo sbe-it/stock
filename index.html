@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0f172a">
     <link rel="stylesheet" href="style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&family=Noto+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -38,58 +38,68 @@
             <span>TOOLFLOW</span>
         </div>
         <div class="nav-links">
-            <button class="nav-btn active" id="nav-inventory" onclick="switchView('inventory')">📦 คลังเครื่องมือ</button>
-            <button class="nav-btn" id="nav-sites" onclick="switchView('sites')">📍 ไซงาน</button>
-            <button class="nav-btn" id="nav-mgmt" onclick="switchView('management')">⚙️ จัดการ</button>
+            <button class="nav-btn active" id="nav-inventory" onclick="switchView('inventory')"><span class="nav-icon"><i data-lucide="package"></i></span><span class="nav-text">คลังเครื่องมือ</span></button>
+            <button class="nav-btn" id="nav-sites" onclick="switchView('sites')"><span class="nav-icon"><i data-lucide="map-pin"></i></span><span class="nav-text">ไซงาน</span></button>
+            <button class="nav-btn" id="nav-repairs" onclick="switchView('repairs')"><span class="nav-icon-wrap"><span class="nav-icon"><i data-lucide="wrench"></i></span><span class="nav-badge" id="nav-repairs-count" style="display:none;"></span></span><span class="nav-text">งานซ่อม</span></button>
+            <button class="nav-btn" id="nav-mgmt" onclick="switchView('management')"><span class="nav-icon"><i data-lucide="settings"></i></span><span class="nav-text">จัดการ</span></button>
+        </div>
+        <div class="nav-user">
             <span class="user-badge" id="user-badge"></span>
-            <button class="nav-btn" id="nav-logout" onclick="logout()">🚪 ออกจากระบบ</button>
+            <button class="nav-btn nav-logout" id="nav-logout" onclick="logout()" title="ออกจากระบบ"><span class="nav-icon"><i data-lucide="log-out"></i></span><span class="nav-text">ออกจากระบบ</span></button>
         </div>
     </nav>
 
     <div class="container">
         <!-- แถบแผนก -->
         <div class="dept-tabs">
-            <div class="dept-tab active" id="tab-ช่างไฟ" onclick="switchDept('ช่างไฟ')">💡 ช่างไฟ</div>
-            <div class="dept-tab" id="tab-ช่างก่อสร้าง" onclick="switchDept('ช่างก่อสร้าง')">🏗️ ช่างก่อสร้าง</div>
+            <div class="dept-tab active" id="tab-ช่างไฟ" onclick="switchDept('ช่างไฟ')"><i data-lucide="zap" style="width:16px;vertical-align:-3px;"></i> ช่างไฟ</div>
+            <div class="dept-tab" id="tab-ช่างก่อสร้าง" onclick="switchDept('ช่างก่อสร้าง')"><i data-lucide="hard-hat" style="width:16px;vertical-align:-3px;"></i> ช่างก่อสร้าง</div>
         </div>
 
         <!-- VIEW 1: คลังเครื่องมือ -->
         <div id="view-inventory">
             <div class="stats-grid">
-                <div class="glass-panel stat-card"><div class="stat-label">ทั้งหมด</div><div class="stat-value" id="stat-total">0</div></div>
-                <div class="glass-panel stat-card"><div class="stat-label">พร้อมใช้</div><div class="stat-value green" id="stat-available">0</div></div>
-                <div class="glass-panel stat-card"><div class="stat-label">เบิกออก</div><div class="stat-value orange" id="stat-borrowed">0</div></div>
+                <div class="glass-panel stat-card"><div class="stat-icon stat-icon-blue"><i data-lucide="layers"></i></div><div class="stat-label">ทั้งหมด</div><div class="stat-value" id="stat-total">0</div></div>
+                <div class="glass-panel stat-card"><div class="stat-icon stat-icon-green"><i data-lucide="check-circle-2"></i></div><div class="stat-label">พร้อมใช้</div><div class="stat-value green" id="stat-available">0</div></div>
+                <div class="glass-panel stat-card"><div class="stat-icon stat-icon-orange"><i data-lucide="arrow-up-right"></i></div><div class="stat-label">เบิกออก</div><div class="stat-value orange" id="stat-borrowed">0</div></div>
             </div>
             <div class="search-bar">
-                <input type="search" id="tool-search" placeholder="🔍 ค้นหาด้วยรหัส หรือ ชื่อเครื่องมือ..." autocomplete="off" oninput="onToolSearch(this.value)">
-                <button type="button" id="search-clear" class="btn-outline btn-sm" onclick="clearToolSearch()" style="display:none;">✕</button>
+                <i data-lucide="search" class="search-icon"></i>
+                <input type="search" id="tool-search" placeholder="ค้นหาด้วยรหัส หรือ ชื่อเครื่องมือ..." autocomplete="off" oninput="onToolSearch(this.value)">
+                <button type="button" id="search-clear" class="btn-outline btn-sm" onclick="clearToolSearch()" style="display:none;"><i data-lucide="x"></i></button>
             </div>
             <div id="inventory-content"></div>
         </div>
 
         <!-- VIEW 2: ไซงาน -->
         <div id="view-sites" style="display:none;">
-            <h2 class="section-title">📍 สรุปเครื่องมือตามไซงาน</h2>
+            <h2 class="section-title"><i data-lucide="map-pin"></i> สรุปเครื่องมือตามไซงาน</h2>
             <div id="sites-content"></div>
         </div>
 
         <!-- VIEW 3: จัดการ -->
         <div id="view-management" style="display:none;">
             <!-- จัดการไซงาน -->
-            <div class="mgmt-header"><h2 class="section-title">📍 จัดการไซงาน</h2><button class="btn-primary btn-sm" onclick="openSiteModal()">+ เพิ่มไซงาน</button></div>
+            <div class="mgmt-header"><h2 class="section-title"><i data-lucide="map-pin"></i> จัดการไซงาน</h2><button class="btn-primary btn-sm" onclick="openSiteModal()"><i data-lucide="plus" style="width:14px;vertical-align:-2px;"></i> เพิ่มไซงาน</button></div>
             <div class="glass-panel table-wrap"><table><thead><tr><th>ชื่อไซงาน</th><th style="text-align:right;">จัดการ</th></tr></thead><tbody id="mgmt-sites-body"></tbody></table></div>
 
             <!-- จัดการหมวดหมู่ -->
-            <div class="mgmt-header"><h2 class="section-title">📁 จัดการหมวดหมู่</h2><button class="btn-outline btn-sm" onclick="openCategoryModal()">+ เพิ่มกลุ่ม</button></div>
+            <div class="mgmt-header"><h2 class="section-title"><i data-lucide="folder"></i> จัดการหมวดหมู่</h2><button class="btn-outline btn-sm" onclick="openCategoryModal()"><i data-lucide="plus" style="width:14px;vertical-align:-2px;"></i> เพิ่มกลุ่ม</button></div>
             <div class="glass-panel table-wrap"><table><thead><tr><th>ชื่อกลุ่ม</th><th>แผนก</th><th style="text-align:right;">จัดการ</th></tr></thead><tbody id="mgmt-cats-body"></tbody></table></div>
 
             <!-- จัดการเครื่องมือ -->
-            <div class="mgmt-header"><h2 class="section-title">🔧 จัดการเครื่องมือ</h2><button class="btn-primary btn-sm" onclick="openToolModal()">+ เพิ่มเครื่องมือ</button></div>
-            <div class="glass-panel table-wrap"><table><thead><tr><th>รูป</th><th>รหัส</th><th>ชื่อ</th><th>แผนก</th><th>ทั้งหมด</th><th>คงเหลือ</th><th>อยู่ที่</th><th style="text-align:right;">จัดการ</th></tr></thead><tbody id="mgmt-tools-body"></tbody></table></div>
+            <div class="mgmt-header"><h2 class="section-title"><i data-lucide="wrench"></i> จัดการเครื่องมือ</h2><button class="btn-primary btn-sm" onclick="openToolModal()"><i data-lucide="plus" style="width:14px;vertical-align:-2px;"></i> เพิ่มเครื่องมือ</button></div>
+            <div class="glass-panel table-wrap"><table><thead><tr><th>รูป</th><th>รหัส</th><th>ชื่อ</th><th>แผนก</th><th>ทั้งหมด</th><th>คงเหลือ</th><th>สถานะ</th><th>อยู่ที่</th><th style="text-align:right;">จัดการ</th></tr></thead><tbody id="mgmt-tools-body"></tbody></table></div>
 
             <!-- จัดการผู้ใช้ -->
-            <div class="mgmt-header"><h2 class="section-title">👥 จัดการผู้ใช้</h2><button class="btn-primary btn-sm" onclick="openUserModal()">+ เพิ่มผู้ใช้</button></div>
+            <div class="mgmt-header"><h2 class="section-title"><i data-lucide="users"></i> จัดการผู้ใช้</h2><button class="btn-primary btn-sm" onclick="openUserModal()"><i data-lucide="plus" style="width:14px;vertical-align:-2px;"></i> เพิ่มผู้ใช้</button></div>
             <div class="glass-panel table-wrap"><table><thead><tr><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง</th><th>สิทธิ์</th><th style="text-align:right;">จัดการ</th></tr></thead><tbody id="mgmt-users-body"></tbody></table></div>
+        </div>
+
+        <!-- VIEW 4: งานซ่อม -->
+        <div id="view-repairs" style="display:none;">
+            <div class="mgmt-header"><h2 class="section-title"><i data-lucide="wrench"></i> ใบแจ้งซ่อม <span class="badge-stock badge-out" id="repairs-pending-count" style="display:none;"></span></h2></div>
+            <div class="glass-panel table-wrap"><table><thead><tr><th>เครื่องมือ</th><th>ผู้แจ้ง</th><th>อาการ</th><th>รูป</th><th>สถานะ</th><th>วันที่แจ้ง</th><th style="text-align:right;">จัดการ</th></tr></thead><tbody id="mgmt-repairs-body"></tbody></table></div>
         </div>
     </div>
 
@@ -153,15 +163,27 @@
         </form>
     </div></div>
 
+    <!-- MODAL: แจ้งซ่อม -->
+    <div class="modal-overlay" id="repair-modal"><div class="glass-panel modal-content">
+        <h3 style="display:flex;align-items:center;gap:0.5rem;"><i data-lucide="wrench"></i> แจ้งซ่อมเครื่องมือ</h3>
+        <form id="repair-form">
+            <input type="hidden" id="repair-tool-id">
+            <div class="form-group"><label>เครื่องมือ</label><input type="text" id="repair-tool-name" readonly></div>
+            <div class="form-group"><label>อาการเสีย / รายละเอียด</label><textarea id="repair-issue" rows="3" required placeholder="เช่น สว่านไม่มีไฟ เปิดสวิตช์ไม่ติด"></textarea></div>
+            <div class="form-group"><label>รูปถ่ายประกอบ (ถ้ามี)</label><input type="file" id="repair-image-file" accept="image/*"></div>
+            <div class="modal-actions"><button type="button" class="btn-outline" onclick="closeRepairModal()">ยกเลิก</button><button type="submit" class="btn-primary">ส่งใบแจ้งซ่อม</button></div>
+        </form>
+    </div></div>
+
     <!-- MODAL: ประวัติ -->
     <div class="modal-overlay" id="history-modal"><div class="glass-panel modal-content modal-lg">
-        <div class="modal-header"><h3 id="history-modal-title">ประวัติ</h3><button class="btn-outline btn-sm" onclick="closeHistoryModal()">✕</button></div>
+        <div class="modal-header"><h3 id="history-modal-title">ประวัติ</h3><button class="btn-outline btn-sm" onclick="closeHistoryModal()"><i data-lucide="x"></i></button></div>
         <div id="tool-history-list"></div>
     </div></div>
 
     <!-- MODAL: สรุปสถานที่ -->
     <div class="modal-overlay" id="location-modal"><div class="glass-panel modal-content modal-lg">
-        <div class="modal-header"><h3 id="location-modal-title">📍 สรุปสถานที่</h3><button class="btn-outline btn-sm" onclick="closeLocationModal()">✕</button></div>
+        <div class="modal-header"><h3 id="location-modal-title">สรุปสถานที่</h3><button class="btn-outline btn-sm" onclick="closeLocationModal()"><i data-lucide="x"></i></button></div>
         <div id="tool-location-list"></div>
     </div></div>
 
