@@ -360,7 +360,7 @@ function renderAttachments(r){
     if(!list.length) return '-';
     return '<div style="display:flex;gap:3px;flex-wrap:wrap;align-items:center;">'+list.map(a=>{
         const isImg=(a.type||'').startsWith('image/');
-        const ring=a.kind==='doc'?'outline:2px solid var(--primary);outline-offset:-2px;':'';
+        const ring=(a.kind&&a.kind!=='report')?'outline:2px solid var(--primary);outline-offset:-2px;':'';
         return isImg
             ? `<a href="${a.url}" target="_blank" rel="noopener" title="${a.name||''}"><img src="${a.url}" loading="lazy" decoding="async" style="width:34px;height:34px;border-radius:4px;object-fit:cover;${ring}"></a>`
             : `<a href="${a.url}" target="_blank" rel="noopener" title="${a.name||'เอกสาร'}" class="btn-outline btn-sm" style="padding:4px 6px;display:inline-flex;align-items:center;gap:2px;"><i data-lucide="file-text" style="width:14px;"></i></a>`;
@@ -580,12 +580,16 @@ document.getElementById('repair-form').addEventListener('submit',async e=>{
     e.preventDefault(); if(repairSubmitting) return;
     const id=document.getElementById('repair-tool-id').value;
     const issue=document.getElementById('repair-issue').value.trim();
-    const files=[...document.getElementById('repair-image-file').files];
+    const imgFiles=[...document.getElementById('repair-image-file').files];
+    const docFiles=[...document.getElementById('repair-predoc-file').files];
     const submitBtn=e.submitter||document.querySelector('#repair-form button[type="submit"]');
     repairSubmitting=true; if(submitBtn) submitBtn.disabled=true;
     try{
-        const attachments=await uploadRepairFiles(files,'report');
-        if(attachments===null) return; // อัปโหลดล้มเหลว (แจ้ง error ในฟังก์ชันแล้ว)
+        const imgAtt=await uploadRepairFiles(imgFiles,'report');
+        if(imgAtt===null) return; // อัปโหลดล้มเหลว (แจ้ง error ในฟังก์ชันแล้ว)
+        const docAtt=await uploadRepairFiles(docFiles,'predoc');
+        if(docAtt===null) return;
+        const attachments=imgAtt.concat(docAtt);
         const imageUrl=attachments.find(a=>a.type&&a.type.startsWith('image/'))?.url||null; // เผื่อโค้ดเก่าที่อ่าน image_url
         const{error:iErr}=await _supabase.from('repairs').insert([{
             tool_id:id, reported_by:currentUser.name, issue, image_url:imageUrl, attachments, status:'pending'
