@@ -275,16 +275,16 @@ function renderSites() {
 // ===== RENDER: MANAGEMENT =====
 function renderMgmt() {
     // Sites
-    const sb=document.getElementById('mgmt-sites-body'); sb.innerHTML='';
-    sites.forEach(s=>{ sb.innerHTML+=`<tr><td><b>${s.name}</b></td><td style="text-align:right;"><button class="btn-outline btn-sm" onclick="openSiteModal(${s.id})"><i data-lucide="pencil"></i></button> <button class="btn-outline btn-sm btn-danger" onclick="deleteSite(${s.id})"><i data-lucide="trash-2"></i></button></td></tr>`; });
+    const sb=document.getElementById('mgmt-sites-body');
+    sb.innerHTML=sites.map(s=>`<tr><td><b>${s.name}</b></td><td style="text-align:right;"><button class="btn-outline btn-sm" onclick="openSiteModal(${s.id})"><i data-lucide="pencil"></i></button> <button class="btn-outline btn-sm btn-danger" onclick="deleteSite(${s.id})"><i data-lucide="trash-2"></i></button></td></tr>`).join('');
     // Categories
-    const cb=document.getElementById('mgmt-cats-body'); cb.innerHTML='';
-    categories.forEach(c=>{ cb.innerHTML+=`<tr><td><b>${c.name}</b></td><td><span class="badge-stock badge-ok">${c.department}</span></td><td style="text-align:right;"><button class="btn-outline btn-sm" onclick="openCategoryModal(${c.id})"><i data-lucide="pencil"></i></button> <button class="btn-outline btn-sm btn-danger" onclick="deleteCategory(${c.id})"><i data-lucide="trash-2"></i></button></td></tr>`; });
+    const cb=document.getElementById('mgmt-cats-body');
+    cb.innerHTML=categories.map(c=>`<tr><td><b>${c.name}</b></td><td><span class="badge-stock badge-ok">${c.department}</span></td><td style="text-align:right;"><button class="btn-outline btn-sm" onclick="openCategoryModal(${c.id})"><i data-lucide="pencil"></i></button> <button class="btn-outline btn-sm btn-danger" onclick="deleteCategory(${c.id})"><i data-lucide="trash-2"></i></button></td></tr>`).join('');
     // Tools
-    const tb=document.getElementById('mgmt-tools-body'); tb.innerHTML='';
+    const tb=document.getElementById('mgmt-tools-body');
     const mtFiltered=tools.filter(t=>toolMatchesSearch(t,mgmtToolSearch));
     if(!mtFiltered.length){ tb.innerHTML=`<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:1rem;">${mgmtToolSearch?'ไม่พบเครื่องมือที่ตรงกับคำค้น':'ยังไม่มีเครื่องมือ'}</td></tr>`; }
-    mtFiltered.forEach(t=>{
+    else tb.innerHTML=mtFiltered.map(t=>{
         const locs=getToolLocations(t.id);
         const locStr=locs.length?locs.map(l=>`${l.name}(${l.qty})`).join(', '):'ในคลัง';
         const repairing=t.status==='repairing', retired=t.status==='retired';
@@ -293,18 +293,18 @@ function renderMgmt() {
         const statusBtns=retired
             ? `<button class="btn-outline btn-sm" onclick="toggleToolStatus(${t.id})" title="กู้คืนจากปลดระวาง"><i data-lucide="rotate-ccw"></i></button>`
             : `<button class="btn-outline btn-sm" onclick="toggleToolStatus(${t.id})" title="${repairing?'ปลดสถานะซ่อม':'ตั้งเป็นกำลังซ่อม'}">${repairing?'<i data-lucide="check"></i>':'<i data-lucide="wrench"></i>'}</button> <button class="btn-outline btn-sm btn-danger" onclick="retireTool(${t.id})" title="ปลดระวาง"><i data-lucide="ban"></i></button>`;
-        tb.innerHTML+=`<tr><td><img src="${t.image_url||''}" loading="lazy" decoding="async" style="width:28px;height:28px;border-radius:4px;"></td><td style="font-family:monospace;font-weight:700;">${t.tool_code||'-'}</td><td style="font-weight:600;">${t.name}</td><td><span class="badge-stock badge-ok" style="font-size:0.7rem;">${t.department}</span></td><td>${t.total_stock}</td><td>${t.available_stock}</td><td>${statusBadge}</td><td style="font-size:0.7rem;max-width:150px;color:var(--muted);">${locStr}</td><td style="text-align:right;white-space:nowrap;">${statusBtns} <button class="btn-outline btn-sm" onclick="openLocationModal(${t.id})"><i data-lucide="map-pin"></i></button> <button class="btn-outline btn-sm" onclick="openToolModal(${t.id})"><i data-lucide="pencil"></i></button> <button class="btn-outline btn-sm btn-danger" onclick="deleteTool(${t.id})"><i data-lucide="trash-2"></i></button></td></tr>`;
-    });
+        return `<tr><td><img src="${t.image_url||''}" loading="lazy" decoding="async" style="width:28px;height:28px;border-radius:4px;"></td><td style="font-family:monospace;font-weight:700;">${t.tool_code||'-'}</td><td style="font-weight:600;">${t.name}</td><td><span class="badge-stock badge-ok" style="font-size:0.7rem;">${t.department}</span></td><td>${t.total_stock}</td><td>${t.available_stock}</td><td>${statusBadge}</td><td style="font-size:0.7rem;max-width:150px;color:var(--muted);">${locStr}</td><td style="text-align:right;white-space:nowrap;">${statusBtns} <button class="btn-outline btn-sm" onclick="openLocationModal(${t.id})"><i data-lucide="map-pin"></i></button> <button class="btn-outline btn-sm" onclick="openToolModal(${t.id})"><i data-lucide="pencil"></i></button> <button class="btn-outline btn-sm btn-danger" onclick="deleteTool(${t.id})"><i data-lucide="trash-2"></i></button></td></tr>`;
+    }).join('');
     // Users
     const ub=document.getElementById('mgmt-users-body'); if(ub){ ub.innerHTML='';
         if(!usersTableReady){
             ub.innerHTML=`<tr><td colspan="4" style="color:var(--warning);padding:1rem;font-size:0.85rem;"><i data-lucide="alert-triangle" style="vertical-align:-3px;"></i> ยังไม่ได้สร้างตาราง <b>app_users</b> ในฐานข้อมูล จึงยังเพิ่ม/ลบผู้ใช้ถาวรไม่ได้ (ตอนนี้ใช้บัญชีเริ่มต้น admin/user) — รัน SQL ในไฟล์ <b>add-users-table.sql</b> ที่ Supabase ก่อน</td></tr>`;
         } else if(!appUsers.length){
             ub.innerHTML=`<tr><td colspan="4" style="text-align:center;color:var(--muted);padding:1rem;">ยังไม่มีผู้ใช้</td></tr>`;
-        } else appUsers.forEach(u=>{
+        } else ub.innerHTML=appUsers.map(u=>{
             const isMe=currentUser&&u.username===currentUser.username;
-            ub.innerHTML+=`<tr><td style="font-family:monospace;font-weight:700;">${u.username}${isMe?' <span style="color:var(--muted);font-weight:400;">(คุณ)</span>':''}</td><td>${u.name||'-'}</td><td><span class="badge-stock ${u.role==='admin'?'badge-out':'badge-ok'}" style="font-size:0.7rem;">${u.role==='admin'?'แอดมิน':'ดูอย่างเดียว'}</span></td><td style="text-align:right;white-space:nowrap;"><button class="btn-outline btn-sm" onclick="openUserModal(${u.id})"><i data-lucide="pencil"></i></button> <button class="btn-outline btn-sm btn-danger" onclick="deleteUser(${u.id})"><i data-lucide="trash-2"></i></button></td></tr>`;
-        });
+            return `<tr><td style="font-family:monospace;font-weight:700;">${u.username}${isMe?' <span style="color:var(--muted);font-weight:400;">(คุณ)</span>':''}</td><td>${u.name||'-'}</td><td><span class="badge-stock ${u.role==='admin'?'badge-out':'badge-ok'}" style="font-size:0.7rem;">${u.role==='admin'?'แอดมิน':'ดูอย่างเดียว'}</span></td><td style="text-align:right;white-space:nowrap;"><button class="btn-outline btn-sm" onclick="openUserModal(${u.id})"><i data-lucide="pencil"></i></button> <button class="btn-outline btn-sm btn-danger" onclick="deleteUser(${u.id})"><i data-lucide="trash-2"></i></button></td></tr>`;
+        }).join('');
     }
     // Repairs
     const rb=document.getElementById('mgmt-repairs-body'); const pendingBadge=document.getElementById('repairs-pending-count');
@@ -315,7 +315,7 @@ function renderMgmt() {
             rb.innerHTML=`<tr><td colspan="7" style="color:var(--warning);padding:1rem;font-size:0.85rem;"><i data-lucide="alert-triangle" style="vertical-align:-3px;"></i> ยังไม่ได้สร้างตาราง <b>repairs</b> ในฐานข้อมูล จึงยังใช้ระบบแจ้งซ่อมไม่ได้ — รัน SQL ในไฟล์ <b>add-repairs-system.sql</b> ที่ Supabase ก่อน (และสร้าง bucket "repair-images" แบบ Public)</td></tr>`;
         } else if(!repairs.length){
             rb.innerHTML=`<tr><td colspan="7" style="text-align:center;color:var(--muted);padding:1rem;">ยังไม่มีใบแจ้งซ่อม</td></tr>`;
-        } else repairs.forEach(r=>{
+        } else rb.innerHTML=repairs.map(r=>{
             const statusMap={pending:['badge-out','รอดำเนินการ'],repairing:['badge-repair','<i data-lucide="wrench"></i> กำลังซ่อม'],done:['badge-ok','<i data-lucide="check"></i> ซ่อมเสร็จ'],rejected:['badge-out','ปฏิเสธ'],scrapped:['badge-retired','<i data-lucide="ban"></i> ซ่อมไม่ได้ (ปลดระวาง)']};
             const[badgeCls,badgeTxt]=statusMap[r.status]||['badge-ok',r.status];
             const filesHtml=renderAttachments(r);
@@ -328,8 +328,8 @@ function renderMgmt() {
             if(r.status==='pending') actions=`<button class="btn-primary btn-sm" onclick="${stop}startRepair(${r.id})">เริ่มซ่อม</button> <button class="btn-outline btn-sm btn-danger" onclick="${stop}rejectRepair(${r.id})">ปฏิเสธ</button>`;
             else if(r.status==='repairing') actions=`<button class="btn-primary btn-sm" onclick="${stop}openCompleteRepairModal(${r.id})">ปิดงาน</button>`;
             else actions=`<button class="btn-outline btn-sm btn-danger" onclick="${stop}deleteRepair(${r.id})"><i data-lucide="trash-2"></i></button>`;
-            rb.innerHTML+=`<tr onclick="openRepairDetail(${r.id})" style="cursor:pointer;"><td style="font-weight:600;">${r.tool_name}<br><span style="font-family:monospace;font-size:0.7rem;color:var(--muted);">${r.tool_code}</span></td><td>${r.reported_by}</td><td style="max-width:220px;font-size:0.8rem;">${r.issue}${summary}</td><td>${filesHtml}</td><td><span class="badge-stock ${badgeCls}" style="font-size:0.7rem;">${badgeTxt}</span></td><td style="font-size:0.75rem;color:var(--muted);white-space:nowrap;">${new Date(r.created_at).toLocaleString()}</td><td style="text-align:right;white-space:nowrap;">${actions}</td></tr>`;
-        });
+            return `<tr onclick="openRepairDetail(${r.id})" style="cursor:pointer;"><td style="font-weight:600;">${r.tool_name}<br><span style="font-family:monospace;font-size:0.7rem;color:var(--muted);">${r.tool_code}</span></td><td>${r.reported_by}</td><td style="max-width:220px;font-size:0.8rem;">${r.issue}${summary}</td><td>${filesHtml}</td><td><span class="badge-stock ${badgeCls}" style="font-size:0.7rem;">${badgeTxt}</span></td><td style="font-size:0.75rem;color:var(--muted);white-space:nowrap;">${new Date(r.created_at).toLocaleString()}</td><td style="text-align:right;white-space:nowrap;">${actions}</td></tr>`;
+        }).join('');
     }
 }
 
