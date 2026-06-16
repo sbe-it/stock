@@ -310,10 +310,11 @@ function renderMgmt() {
             if(r.admin_note) summary+=`<div style="font-size:0.72rem;color:var(--muted);margin-top:3px;"><i data-lucide="clipboard-check" style="width:12px;vertical-align:-2px;"></i> ${r.admin_note}</div>`;
             if(r.cost!=null) summary+=`<div style="font-size:0.72rem;color:var(--warning);font-weight:700;margin-top:2px;">฿ ${Number(r.cost).toLocaleString()}</div>`;
             let actions='';
-            if(r.status==='pending') actions=`<button class="btn-primary btn-sm" onclick="startRepair(${r.id})">เริ่มซ่อม</button> <button class="btn-outline btn-sm btn-danger" onclick="rejectRepair(${r.id})">ปฏิเสธ</button>`;
-            else if(r.status==='repairing') actions=`<button class="btn-primary btn-sm" onclick="openCompleteRepairModal(${r.id})">ปิดงาน</button>`;
-            else actions=`<button class="btn-outline btn-sm btn-danger" onclick="deleteRepair(${r.id})"><i data-lucide="trash-2"></i></button>`;
-            rb.innerHTML+=`<tr><td style="font-weight:600;">${r.tool_name}<br><span style="font-family:monospace;font-size:0.7rem;color:var(--muted);">${r.tool_code}</span></td><td>${r.reported_by}</td><td style="max-width:220px;font-size:0.8rem;">${r.issue}${summary}</td><td>${filesHtml}</td><td><span class="badge-stock ${badgeCls}" style="font-size:0.7rem;">${badgeTxt}</span></td><td style="font-size:0.75rem;color:var(--muted);white-space:nowrap;">${new Date(r.created_at).toLocaleString()}</td><td style="text-align:right;white-space:nowrap;">${actions}</td></tr>`;
+            const stop='event.stopPropagation();';
+            if(r.status==='pending') actions=`<button class="btn-primary btn-sm" onclick="${stop}startRepair(${r.id})">เริ่มซ่อม</button> <button class="btn-outline btn-sm btn-danger" onclick="${stop}rejectRepair(${r.id})">ปฏิเสธ</button>`;
+            else if(r.status==='repairing') actions=`<button class="btn-primary btn-sm" onclick="${stop}openCompleteRepairModal(${r.id})">ปิดงาน</button>`;
+            else actions=`<button class="btn-outline btn-sm btn-danger" onclick="${stop}deleteRepair(${r.id})"><i data-lucide="trash-2"></i></button>`;
+            rb.innerHTML+=`<tr onclick="openRepairDetail(${r.id})" style="cursor:pointer;"><td style="font-weight:600;">${r.tool_name}<br><span style="font-family:monospace;font-size:0.7rem;color:var(--muted);">${r.tool_code}</span></td><td>${r.reported_by}</td><td style="max-width:220px;font-size:0.8rem;">${r.issue}${summary}</td><td>${filesHtml}</td><td><span class="badge-stock ${badgeCls}" style="font-size:0.7rem;">${badgeTxt}</span></td><td style="font-size:0.75rem;color:var(--muted);white-space:nowrap;">${new Date(r.created_at).toLocaleString()}</td><td style="text-align:right;white-space:nowrap;">${actions}</td></tr>`;
         });
     }
 }
@@ -353,6 +354,39 @@ async function uploadRepairFiles(files, kind){
     }
     return out;
 }
+// แสดงไฟล์แนบขนาดใหญ่ในหน้ารายละเอียด (กรองตาม kind: 'report'/'doc')
+function renderAttachmentsLarge(list){
+    if(!list.length) return '<div style="color:var(--muted);font-size:0.85rem;">— ไม่มีไฟล์แนบ —</div>';
+    return '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+list.map(a=>{
+        const isImg=(a.type||'').startsWith('image/');
+        return isImg
+            ? `<a href="${a.url}" target="_blank" rel="noopener" title="${a.name||''}"><img src="${a.url}" loading="lazy" decoding="async" style="width:100px;height:100px;border-radius:8px;object-fit:cover;border:1px solid var(--border);"></a>`
+            : `<a href="${a.url}" target="_blank" rel="noopener" class="btn-outline" style="display:inline-flex;align-items:center;gap:6px;padding:10px 14px;"><i data-lucide="file-text"></i> ${a.name||'เอกสาร'}</a>`;
+    }).join('')+'</div>';
+}
+// เปิดหน้ารายละเอียดงานซ่อม (คลิกจากแถวในตาราง)
+window.openRepairDetail=id=>{
+    const r=repairs.find(x=>x.id==id); if(!r)return;
+    const statusMap={pending:'รอดำเนินการ',repairing:'กำลังซ่อม',done:'ซ่อมเสร็จ',rejected:'ปฏิเสธ',scrapped:'ซ่อมไม่ได้ (ปลดระวาง)'};
+    let all=Array.isArray(r.attachments)?r.attachments.slice():[];
+    if(!all.length && r.image_url) all.push({url:r.image_url,name:'รูป',type:'image/',kind:'report'});
+    const reportFiles=all.filter(a=>a.kind!=='doc'), docFiles=all.filter(a=>a.kind==='doc');
+    const row=(label,val)=>val?`<div style="margin-bottom:0.75rem;"><div style="font-size:0.72rem;color:var(--muted);font-weight:600;margin-bottom:2px;">${label}</div><div>${val}</div></div>`:'';
+    document.getElementById('repair-detail-body').innerHTML=
+        row('เครื่องมือ', `<b>${r.tool_name}</b> <span style="font-family:monospace;color:var(--muted);">${r.tool_code||''}</span>`)
+        + row('ผู้แจ้ง', r.reported_by)
+        + row('วันที่แจ้ง', new Date(r.created_at).toLocaleString())
+        + row('สถานะ', `<span class="badge-stock badge-ok">${statusMap[r.status]||r.status}</span>`)
+        + row('อาการเสีย / รายละเอียด', `<div style="white-space:pre-wrap;">${r.issue||'-'}</div>`)
+        + `<div style="margin-bottom:0.75rem;"><div style="font-size:0.72rem;color:var(--muted);font-weight:600;margin-bottom:4px;">เอกสาร / รูปก่อนซ่อม</div>${renderAttachmentsLarge(reportFiles)}</div>`
+        + (r.admin_note?row('หมายเหตุการซ่อม', `<div style="white-space:pre-wrap;">${r.admin_note}</div>`):'')
+        + (r.cost!=null?row('ค่าใช้จ่ายซ่อม', `<b style="color:var(--warning);">฿ ${Number(r.cost).toLocaleString()}</b>`):'')
+        + (r.resolved_by?row('ผู้ปิดงาน', r.resolved_by):'')
+        + ((docFiles.length||['done','scrapped'].includes(r.status))?`<div style="margin-bottom:0.5rem;"><div style="font-size:0.72rem;color:var(--muted);font-weight:600;margin-bottom:4px;">เอกสารปิดงาน / ใบเสร็จ</div>${renderAttachmentsLarge(docFiles)}</div>`:'');
+    document.getElementById('repair-detail-modal').style.display='flex';
+    if(window.lucide) lucide.createIcons();
+};
+window.closeRepairDetail=()=>document.getElementById('repair-detail-modal').style.display='none';
 // แสดงไฟล์แนบในตาราง: รูป -> thumbnail, ไฟล์อื่น -> ลิงก์ไอคอน
 function renderAttachments(r){
     const list=Array.isArray(r.attachments)?r.attachments.slice():[];
