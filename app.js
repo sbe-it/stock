@@ -339,6 +339,21 @@ async function compressImage(file, maxDim=600, quality=0.72){
     }catch(err){ console.warn('ย่อรูปไม่สำเร็จ ใช้ไฟล์เดิม:', err); return {blob:file, ext:(file.name.split('.').pop()||'jpg'), type:file.type}; }
 }
 
+// ดึง "path ในถัง" ออกจาก public URL เพื่อใช้สั่งลบไฟล์
+function storagePathFromUrl(url, bucket){
+    if(!url || typeof url!=='string') return null;
+    const marker=`/storage/v1/object/public/${bucket}/`;
+    const i=url.indexOf(marker);
+    if(i<0) return null;
+    return decodeURIComponent(url.slice(i+marker.length).split('?')[0]);
+}
+// ลบไฟล์ใน Storage ตาม URL (ข้ามเงียบ ๆ ถ้าลบไม่ได้ จะได้ไม่บล็อกการลบ record)
+async function deleteStorageFiles(bucket, urls){
+    const paths=(urls||[]).map(u=>storagePathFromUrl(u,bucket)).filter(Boolean);
+    if(!paths.length) return;
+    try{ const{error}=await _supabase.storage.from(bucket).remove(paths); if(error) console.warn('ลบไฟล์ Storage ไม่สำเร็จ:',error.message); }
+    catch(e){ console.warn('ลบไฟล์ Storage ผิดพลาด (ข้าม):',e); }
+}
 // อัปโหลดไฟล์แนบใบซ่อมหลายไฟล์ (รูป -> ย่อก่อน, PDF/อื่น ๆ -> อัปตรง)
 // คืน array ของ {url,name,type,kind} หรือ null ถ้ามีไฟล์ใดอัปไม่สำเร็จ
 async function uploadRepairFiles(files, kind){
@@ -453,7 +468,7 @@ document.getElementById('category-form').addEventListener('submit',async e=>{
     const d={name:document.getElementById('cat-name').value,department:document.getElementById('cat-dept').value,image_url:url};
     if(id) await _supabase.from('categories').update(d).eq('id',id); else await _supabase.from('categories').insert([d]); await refreshData(); closeCategoryModal();
 });
-window.deleteCategory=async id=>{ if(!isAdmin())return; if(confirm('ลบกลุ่ม?')){ await _supabase.from('categories').delete().eq('id',id); await refreshData(); }};
+window.deleteCategory=async id=>{ if(!isAdmin())return; if(confirm('ลบกลุ่ม?')){ const c=categories.find(x=>x.id==id); await _supabase.from('categories').delete().eq('id',id); if(c) await deleteStorageFiles('category-images',[c.image_url]); await refreshData(); }};
 
 // Tool
 window.openToolModal=(id=null)=>{ if(!isAdmin())return; document.getElementById('tool-form').reset(); document.getElementById('edit-tool-id').value=id||''; if(id){ const t=tools.find(x=>x.id==id); document.getElementById('tool-code').value=t.tool_code||''; document.getElementById('tool-name').value=t.name; document.getElementById('tool-dept').value=t.department; document.getElementById('tool-total').value=t.total_stock; document.getElementById('tool-available').value=t.available_stock; document.getElementById('tool-image-url').value=t.image_url; } updateToolCatList(); document.getElementById('tool-modal').style.display='flex'; };
@@ -469,7 +484,7 @@ document.getElementById('tool-form').addEventListener('submit',async e=>{
     const d={tool_code:tc,name:document.getElementById('tool-name').value,department:document.getElementById('tool-dept').value,category_id:document.getElementById('tool-category-id').value||null,image_url:url,total_stock:parseInt(document.getElementById('tool-total').value),available_stock:parseInt(document.getElementById('tool-available').value)};
     if(id) await _supabase.from('tools').update(d).eq('id',id); else await _supabase.from('tools').insert([d]); await refreshData(); closeToolModal();
 });
-window.deleteTool=async id=>{ if(!isAdmin())return; if(confirm('ลบเครื่องมือ?')){ await _supabase.from('tools').delete().eq('id',id); await refreshData(); }};
+window.deleteTool=async id=>{ if(!isAdmin())return; if(confirm('ลบเครื่องมือ?')){ const t=tools.find(x=>x.id==id); await _supabase.from('tools').delete().eq('id',id); if(t) await deleteStorageFiles('tool-images',[t.image_url]); await refreshData(); }};
 
 // User (จัดการผู้ใช้)
 window.openUserModal=(id=null)=>{
@@ -696,7 +711,9 @@ window.finishRepair=async outcome=>{
 window.deleteRepair=async repairId=>{
     if(!isAdmin())return;
     if(!confirm('ลบใบแจ้งซ่อมนี้ออกจากรายการ?'))return;
+    const r=repairs.find(x=>x.id==repairId);
     await _supabase.from('repairs').delete().eq('id',repairId);
+    if(r){ const urls=[...(Array.isArray(r.attachments)?r.attachments.map(a=>a.url):[]), r.image_url]; await deleteStorageFiles('repair-images',urls); }
     await refreshData();
 };
 // แอดมิน: สลับสถานะเครื่องมือด้วยตนเอง (เผื่อกรณีไม่ได้มาจากใบแจ้งซ่อม)
