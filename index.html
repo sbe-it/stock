@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0f172a">
-    <link rel="stylesheet" href="style.css?v=20260613e">
+    <link rel="stylesheet" href="style.css?v=20260613f">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -89,6 +89,11 @@
 
             <!-- จัดการเครื่องมือ -->
             <div class="mgmt-header"><h2 class="section-title"><i data-lucide="wrench"></i> จัดการเครื่องมือ</h2><button class="btn-primary btn-sm" onclick="openToolModal()"><i data-lucide="plus" style="width:14px;vertical-align:-2px;"></i> เพิ่มเครื่องมือ</button></div>
+            <div class="search-bar" style="margin-bottom:0.75rem;">
+                <i data-lucide="search" class="search-icon"></i>
+                <input type="search" id="mgmt-tool-search" placeholder="ค้นหารหัส หรือ ชื่อเครื่องมือ..." autocomplete="off" oninput="onMgmtToolSearch(this.value)">
+                <button type="button" id="mgmt-search-clear" class="btn-outline btn-sm" onclick="clearMgmtToolSearch()" style="display:none;"><i data-lucide="x"></i></button>
+            </div>
             <div class="glass-panel table-wrap"><table><thead><tr><th>รูป</th><th>รหัส</th><th>ชื่อ</th><th>แผนก</th><th>ทั้งหมด</th><th>คงเหลือ</th><th>สถานะ</th><th>อยู่ที่</th><th style="text-align:right;">จัดการ</th></tr></thead><tbody id="mgmt-tools-body"></tbody></table></div>
 
             <!-- จัดการผู้ใช้ -->
@@ -211,6 +216,6 @@
         <div id="tool-location-list"></div>
     </div></div>
 
-    <script src="app.js?v=20260613e"></script>
+    <script src="app.js?v=20260613f"></script>
 </body>
 </html>

@@ -207,6 +207,18 @@ window.clearToolSearch=()=>{
     inp.value=''; searchTerm=''; document.getElementById('search-clear').style.display='none';
     renderInventory(); if(window.lucide) lucide.createIcons(); inp.focus();
 };
+// ===== ค้นหาในหน้าจัดการเครื่องมือ =====
+let mgmtToolSearch='', mgmtSearchTimer=null;
+window.onMgmtToolSearch=v=>{
+    document.getElementById('mgmt-search-clear').style.display = v ? 'inline-flex' : 'none';
+    clearTimeout(mgmtSearchTimer);
+    mgmtSearchTimer=setTimeout(()=>{ mgmtToolSearch=normText(v); renderMgmt(); if(window.lucide) lucide.createIcons(); },200);
+};
+window.clearMgmtToolSearch=()=>{
+    const inp=document.getElementById('mgmt-tool-search');
+    inp.value=''; mgmtToolSearch=''; document.getElementById('mgmt-search-clear').style.display='none';
+    renderMgmt(); if(window.lucide) lucide.createIcons(); inp.focus();
+};
 
 // ===== RENDER: INVENTORY =====
 function renderInventory() {
@@ -270,7 +282,9 @@ function renderMgmt() {
     categories.forEach(c=>{ cb.innerHTML+=`<tr><td><b>${c.name}</b></td><td><span class="badge-stock badge-ok">${c.department}</span></td><td style="text-align:right;"><button class="btn-outline btn-sm" onclick="openCategoryModal(${c.id})"><i data-lucide="pencil"></i></button> <button class="btn-outline btn-sm btn-danger" onclick="deleteCategory(${c.id})"><i data-lucide="trash-2"></i></button></td></tr>`; });
     // Tools
     const tb=document.getElementById('mgmt-tools-body'); tb.innerHTML='';
-    tools.forEach(t=>{
+    const mtFiltered=tools.filter(t=>toolMatchesSearch(t,mgmtToolSearch));
+    if(!mtFiltered.length){ tb.innerHTML=`<tr><td colspan="9" style="text-align:center;color:var(--muted);padding:1rem;">${mgmtToolSearch?'ไม่พบเครื่องมือที่ตรงกับคำค้น':'ยังไม่มีเครื่องมือ'}</td></tr>`; }
+    mtFiltered.forEach(t=>{
         const locs=getToolLocations(t.id);
         const locStr=locs.length?locs.map(l=>`${l.name}(${l.qty})`).join(', '):'ในคลัง';
         const repairing=t.status==='repairing', retired=t.status==='retired';
