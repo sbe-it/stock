@@ -207,6 +207,16 @@ window.switchView = v => {
     if(deptTabs) deptTabs.style.display=(v==='inventory'||v==='sites')?'flex':'none';
     render();
 };
+// แท็บย่อยในหน้าจัดการ: แสดงทีละหมวด (กันหน้ายาวเลื่อนนานบนมือถือ)
+let mgmtSection='tools';
+window.setMgmtSection = sec => {
+    mgmtSection=sec;
+    ['tools','sites','cats','users'].forEach(s=>{
+        const el=document.getElementById('mgmt-sec-'+s); if(el) el.style.display=s===sec?'block':'none';
+        const tab=document.getElementById('mtab-'+s); if(tab) tab.classList.toggle('active',s===sec);
+    });
+    window.scrollTo(0,0);
+};
 window.switchDept = d => {
     currentDept=d;
     document.querySelectorAll('.dept-tab').forEach(t=>t.classList.remove('active'));

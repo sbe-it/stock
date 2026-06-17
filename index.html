@@ -14,7 +14,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0f172a">
-    <link rel="stylesheet" href="style.css?v=20260613o">
+    <link rel="stylesheet" href="style.css?v=20260613p">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -95,26 +95,42 @@
 
         <!-- VIEW 3: จัดการ -->
         <div id="view-management" style="display:none;">
-            <!-- จัดการไซงาน -->
-            <div class="mgmt-header"><h2 class="section-title"><i data-lucide="map-pin"></i> จัดการไซงาน</h2><button class="btn-primary btn-sm" onclick="openSiteModal()"><i data-lucide="plus" style="width:14px;vertical-align:-2px;"></i> เพิ่มไซงาน</button></div>
-            <div class="glass-panel table-wrap"><table><thead><tr><th>ชื่อไซงาน</th><th style="text-align:right;">จัดการ</th></tr></thead><tbody id="mgmt-sites-body"></tbody></table></div>
-
-            <!-- จัดการหมวดหมู่ -->
-            <div class="mgmt-header"><h2 class="section-title"><i data-lucide="folder"></i> จัดการหมวดหมู่</h2><button class="btn-outline btn-sm" onclick="openCategoryModal()"><i data-lucide="plus" style="width:14px;vertical-align:-2px;"></i> เพิ่มกลุ่ม</button></div>
-            <div class="glass-panel table-wrap"><table><thead><tr><th>ชื่อกลุ่ม</th><th>แผนก</th><th style="text-align:right;">จัดการ</th></tr></thead><tbody id="mgmt-cats-body"></tbody></table></div>
+            <!-- แท็บเลือกหมวดทีละแบบ -->
+            <div class="mgmt-tabs">
+                <button class="mgmt-tab active" id="mtab-tools" onclick="setMgmtSection('tools')"><i data-lucide="wrench" style="width:15px;vertical-align:-3px;"></i> เครื่องมือ</button>
+                <button class="mgmt-tab" id="mtab-sites" onclick="setMgmtSection('sites')"><i data-lucide="map-pin" style="width:15px;vertical-align:-3px;"></i> ไซงาน</button>
+                <button class="mgmt-tab" id="mtab-cats" onclick="setMgmtSection('cats')"><i data-lucide="folder" style="width:15px;vertical-align:-3px;"></i> หมวดหมู่</button>
+                <button class="mgmt-tab" id="mtab-users" onclick="setMgmtSection('users')"><i data-lucide="users" style="width:15px;vertical-align:-3px;"></i> ผู้ใช้</button>
+            </div>
 
             <!-- จัดการเครื่องมือ -->
-            <div class="mgmt-header"><h2 class="section-title"><i data-lucide="wrench"></i> จัดการเครื่องมือ</h2><button class="btn-primary btn-sm" onclick="openToolModal()"><i data-lucide="plus" style="width:14px;vertical-align:-2px;"></i> เพิ่มเครื่องมือ</button></div>
-            <div class="search-bar" style="margin-bottom:0.75rem;">
-                <i data-lucide="search" class="search-icon"></i>
-                <input type="search" id="mgmt-tool-search" placeholder="ค้นหารหัส หรือ ชื่อเครื่องมือ..." autocomplete="off" oninput="onMgmtToolSearch(this.value)">
-                <button type="button" id="mgmt-search-clear" class="btn-outline btn-sm" onclick="clearMgmtToolSearch()" style="display:none;"><i data-lucide="x"></i></button>
+            <div class="mgmt-section" id="mgmt-sec-tools">
+                <div class="mgmt-header"><h2 class="section-title"><i data-lucide="wrench"></i> จัดการเครื่องมือ</h2><button class="btn-primary btn-sm" onclick="openToolModal()"><i data-lucide="plus" style="width:14px;vertical-align:-2px;"></i> เพิ่มเครื่องมือ</button></div>
+                <div class="search-bar" style="margin-bottom:0.75rem;">
+                    <i data-lucide="search" class="search-icon"></i>
+                    <input type="search" id="mgmt-tool-search" placeholder="ค้นหารหัส หรือ ชื่อเครื่องมือ..." autocomplete="off" oninput="onMgmtToolSearch(this.value)">
+                    <button type="button" id="mgmt-search-clear" class="btn-outline btn-sm" onclick="clearMgmtToolSearch()" style="display:none;"><i data-lucide="x"></i></button>
+                </div>
+                <div class="glass-panel table-wrap"><table><thead><tr><th>รูป</th><th>รหัส</th><th>ชื่อ</th><th>แผนก</th><th>ทั้งหมด</th><th>คงเหลือ</th><th>สถานะ</th><th>อยู่ที่</th><th style="text-align:right;">จัดการ</th></tr></thead><tbody id="mgmt-tools-body"></tbody></table></div>
             </div>
-            <div class="glass-panel table-wrap"><table><thead><tr><th>รูป</th><th>รหัส</th><th>ชื่อ</th><th>แผนก</th><th>ทั้งหมด</th><th>คงเหลือ</th><th>สถานะ</th><th>อยู่ที่</th><th style="text-align:right;">จัดการ</th></tr></thead><tbody id="mgmt-tools-body"></tbody></table></div>
+
+            <!-- จัดการไซงาน -->
+            <div class="mgmt-section" id="mgmt-sec-sites" style="display:none;">
+                <div class="mgmt-header"><h2 class="section-title"><i data-lucide="map-pin"></i> จัดการไซงาน</h2><button class="btn-primary btn-sm" onclick="openSiteModal()"><i data-lucide="plus" style="width:14px;vertical-align:-2px;"></i> เพิ่มไซงาน</button></div>
+                <div class="glass-panel table-wrap"><table><thead><tr><th>ชื่อไซงาน</th><th style="text-align:right;">จัดการ</th></tr></thead><tbody id="mgmt-sites-body"></tbody></table></div>
+            </div>
+
+            <!-- จัดการหมวดหมู่ -->
+            <div class="mgmt-section" id="mgmt-sec-cats" style="display:none;">
+                <div class="mgmt-header"><h2 class="section-title"><i data-lucide="folder"></i> จัดการหมวดหมู่</h2><button class="btn-outline btn-sm" onclick="openCategoryModal()"><i data-lucide="plus" style="width:14px;vertical-align:-2px;"></i> เพิ่มกลุ่ม</button></div>
+                <div class="glass-panel table-wrap"><table><thead><tr><th>ชื่อกลุ่ม</th><th>แผนก</th><th style="text-align:right;">จัดการ</th></tr></thead><tbody id="mgmt-cats-body"></tbody></table></div>
+            </div>
 
             <!-- จัดการผู้ใช้ -->
-            <div class="mgmt-header"><h2 class="section-title"><i data-lucide="users"></i> จัดการผู้ใช้</h2><button class="btn-primary btn-sm" onclick="openUserModal()"><i data-lucide="plus" style="width:14px;vertical-align:-2px;"></i> เพิ่มผู้ใช้</button></div>
-            <div class="glass-panel table-wrap"><table><thead><tr><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง</th><th>สิทธิ์</th><th style="text-align:right;">จัดการ</th></tr></thead><tbody id="mgmt-users-body"></tbody></table></div>
+            <div class="mgmt-section" id="mgmt-sec-users" style="display:none;">
+                <div class="mgmt-header"><h2 class="section-title"><i data-lucide="users"></i> จัดการผู้ใช้</h2><button class="btn-primary btn-sm" onclick="openUserModal()"><i data-lucide="plus" style="width:14px;vertical-align:-2px;"></i> เพิ่มผู้ใช้</button></div>
+                <div class="glass-panel table-wrap"><table><thead><tr><th>ชื่อผู้ใช้</th><th>ชื่อที่แสดง</th><th>สิทธิ์</th><th style="text-align:right;">จัดการ</th></tr></thead><tbody id="mgmt-users-body"></tbody></table></div>
+            </div>
         </div>
 
         <!-- VIEW 4: งานซ่อม -->
@@ -232,6 +248,6 @@
         <div id="tool-location-list"></div>
     </div></div>
 
-    <script src="app.js?v=20260613o"></script>
+    <script src="app.js?v=20260613p"></script>
 </body>
 </html>
