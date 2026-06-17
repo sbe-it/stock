@@ -74,6 +74,19 @@ document.addEventListener('DOMContentLoaded', async()=>{
     }
 });
 
+// รีเฟรชข้อมูลอัตโนมัติเมื่อกลับเข้าหน้าแอป (กันข้อมูลค้าง เช่น สถานะ "ซ่อม" ที่ถูกเปลี่ยนจากเครื่องอื่น)
+// ใช้ throttle กันยิงถี่เกินไป (อย่างน้อย 8 วินาทีต่อครั้ง) เพื่อประหยัด Egress
+let lastAutoRefresh=0;
+function autoRefreshOnReturn(){
+    if(!currentUser) return;
+    const now=Date.now();
+    if(now-lastAutoRefresh < 8000) return;
+    lastAutoRefresh=now;
+    refreshData();
+}
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') autoRefreshOnReturn(); });
+window.addEventListener('focus', autoRefreshOnReturn);
+
 let refreshing=false, refreshQueued=false;
 async function refreshData() {
     // กันการเรียกซ้อน: ถ้ากำลังโหลดอยู่ ให้จดไว้แล้วโหลดต่อรอบเดียว (กันยิง query ถี่จนค้าง)
