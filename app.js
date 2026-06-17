@@ -137,16 +137,22 @@ function buildToolLocations(){
     for(const l of allLogs){
         const tid=l.tool_id; let g=m[tid]; if(!g){ g=m[tid]={}; }
         const k=l.site_id||'none', n=l.site_name||'ไม่ระบุ';
-        let s=g[k]; if(!s){ s=g[k]={name:n, qty:0, users:new Set()}; }
-        if(l.type==='BORROW'){ s.qty+=l.quantity; s.users.add(l.user_name); }
-        else{ s.qty-=l.quantity; }
+        // userBal: นับยอดค้างต่อคน (เบิก +, คืน -) จะได้แสดงเฉพาะคนที่ยังถือของจริง
+        let s=g[k]; if(!s){ s=g[k]={name:n, qty:0, userBal:{}}; }
+        if(l.type==='BORROW'){ s.qty+=l.quantity; s.userBal[l.user_name]=(s.userBal[l.user_name]||0)+l.quantity; }
+        else{ s.qty-=l.quantity; s.userBal[l.user_name]=(s.userBal[l.user_name]||0)-l.quantity; }
     }
     toolLocCache=m;
 }
 function getToolLocations(toolId) {
     if(!toolLocCache) buildToolLocations();
     const g=toolLocCache[toolId]; if(!g) return [];
-    return Object.values(g).filter(s=>s.qty>0).map(s=>({name:s.name,qty:s.qty,users:[...s.users]}));
+    // แสดงเฉพาะคนที่ยอดค้าง > 0 (ยังไม่ได้คืน); ถ้าไม่มีใครค้าง (เช่นข้อมูลคืนผิดคน) ค่อย fallback เป็นคนที่ยอดมากสุด
+    return Object.values(g).filter(s=>s.qty>0).map(s=>{
+        let users=Object.keys(s.userBal).filter(u=>s.userBal[u]>0);
+        if(!users.length) users=Object.keys(s.userBal).filter(u=>s.userBal[u]>=0);
+        return {name:s.name, qty:s.qty, users};
+    });
 }
 
 function updateStats() {
