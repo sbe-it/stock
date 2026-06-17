@@ -671,8 +671,10 @@ document.getElementById('repair-form').addEventListener('submit',async e=>{
             tool_id:id, reported_by:currentUser.name, issue, image_url:imageUrl, attachments, status:'pending'
         }]);
         if(iErr){ alert('ส่งใบแจ้งซ่อมไม่สำเร็จ: '+iErr.message); return; }
+        // ล็อกเครื่องมือทันทีที่แจ้งซ่อม (เบิกไม่ได้จนกว่าแอดมินจะปิดงาน/ปฏิเสธ)
+        await _supabase.from('tools').update({status:'repairing'}).eq('id',id);
         await refreshData(); closeRepairModal();
-        alert('✅ ส่งใบแจ้งซ่อมเรียบร้อย รอแอดมินตรวจสอบ');
+        alert('✅ ส่งใบแจ้งซ่อมเรียบร้อย เครื่องถูกล็อกไม่ให้เบิก รอแอดมินตรวจสอบ');
     } finally {
         repairSubmitting=false; if(submitBtn) submitBtn.disabled=false;
     }
@@ -687,11 +689,15 @@ window.startRepair=async repairId=>{
     await _supabase.from('repairs').update({status:'repairing',updated_at:new Date().toISOString()}).eq('id',repairId);
     await refreshData();
 };
-// แอดมิน: ปฏิเสธใบแจ้งซ่อม (ไม่ล็อกเครื่องมือ)
+// แอดมิน: ปฏิเสธใบแจ้งซ่อม -> ปลดล็อกเครื่องมือกลับมาเบิกได้ (เพราะตอนแจ้งล็อกไว้แล้ว)
 window.rejectRepair=async repairId=>{
     if(!isAdmin())return;
-    if(!confirm('ปฏิเสธใบแจ้งซ่อมนี้?'))return;
+    const r=repairs.find(x=>x.id==repairId); if(!r)return;
+    if(!confirm('ปฏิเสธใบแจ้งซ่อมนี้? เครื่องมือจะกลับมาเบิกได้ตามปกติ'))return;
     await _supabase.from('repairs').update({status:'rejected',resolved_by:currentUser.name,updated_at:new Date().toISOString()}).eq('id',repairId);
+    // ปลดล็อกเฉพาะกรณีที่เครื่องยัง "กำลังซ่อม" อยู่ (กันไปทับสถานะ retired)
+    const t=tools.find(x=>x.id==r.tool_id);
+    if(t && t.status==='repairing') await _supabase.from('tools').update({status:'normal'}).eq('id',r.tool_id);
     await refreshData();
 };
 // แอดมิน: เปิดหน้าสรุป/ปิดงานซ่อม (กรอกหมายเหตุ ค่าใช้จ่าย แนบเอกสาร แล้วเลือก ซ่อมเสร็จ/ซ่อมไม่ได้)
