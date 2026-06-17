@@ -361,7 +361,7 @@ function computeOutstanding(){
     const map={};
     const logs=[...allLogs].sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp)); // เก่า->ใหม่
     for(const l of logs){
-        const site=l.site_name||'ไม่ระบุ';
+        const site=(l.site_name && l.site_name!=='-')?l.site_name:'ส่วนกลาง / ไม่ระบุไซ';
         const key=l.tool_id+'|'+site+'|'+l.user_name;
         let e=map[key]; if(!e){ e=map[key]={tool_id:l.tool_id, tool_name:l.tool_name, department:l.department, site, user:l.user_name, qty:0, lastBorrow:null}; }
         if(l.type==='BORROW'){ e.qty+=l.quantity; e.lastBorrow=l.timestamp; }
@@ -385,11 +385,24 @@ function renderOverview(){
         `<div class="glass-panel stat-card"><div class="stat-icon stat-icon-orange"><i data-lucide="arrow-up-right"></i></div><div class="stat-label">เบิกออกอยู่ (ชิ้น)</div><div class="stat-value orange">${totalOut}</div></div>`
         +`<div class="glass-panel stat-card"><div class="stat-icon stat-icon-blue"><i data-lucide="users"></i></div><div class="stat-label">รายการที่ถืออยู่</div><div class="stat-value">${list.length}</div></div>`
         +`<div class="glass-panel stat-card"><div class="stat-icon" style="background:rgba(220,38,38,0.1);color:var(--danger);"><i data-lucide="alarm-clock"></i></div><div class="stat-label">ค้างเกิน ${OVERDUE_DAYS} วัน</div><div class="stat-value" style="color:var(--danger);">${overdueCount}</div></div>`;
-    const tb=document.getElementById('overview-body'); if(!tb) return;
-    if(!filtered.length){ tb.innerHTML=`<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:1.5rem;">${f?'ไม่พบรายการที่ตรงกับคำค้น':'ตอนนี้ไม่มีของที่เบิกออก ทุกชิ้นอยู่ในคลัง'}</td></tr>`; return; }
-    tb.innerHTML=filtered.map(e=>{
-        const od=e.days!=null && e.days>=OVERDUE_DAYS;
-        return `<tr${od?' style="background:rgba(220,38,38,0.05);"':''}><td style="font-weight:600;">${e.tool_name}<br><span style="font-family:monospace;font-size:0.7rem;color:var(--muted);">${e.tool_code}</span></td><td style="font-weight:600;">${e.user}</td><td>${e.site}</td><td style="text-align:center;">${e.qty}</td><td style="white-space:nowrap;font-size:0.8rem;color:var(--muted);">${e.lastBorrow?new Date(e.lastBorrow).toLocaleDateString('th-TH'):'-'}</td><td style="white-space:nowrap;font-weight:700;${od?'color:var(--danger);':''}">${e.days!=null?e.days+' วัน':'-'}${od?' <i data-lucide="alert-triangle" style="width:13px;vertical-align:-2px;"></i>':''}</td></tr>`;
+    const cont=document.getElementById('overview-content'); if(!cont) return;
+    if(!filtered.length){ cont.innerHTML=`<div class="glass-panel" style="padding:2rem;text-align:center;color:var(--muted);">${f?'ไม่พบรายการที่ตรงกับคำค้น':'ตอนนี้ไม่มีของที่เบิกออก ทุกชิ้นอยู่ในคลัง'}</div>`; return; }
+    // จัดกลุ่มตามไซงาน
+    const groups={};
+    filtered.forEach(e=>{ (groups[e.site]=groups[e.site]||[]).push(e); });
+    const maxDays=arr=>arr.reduce((m,e)=>Math.max(m,e.days||0),0);
+    const siteNames=Object.keys(groups).sort((a,b)=>maxDays(groups[b])-maxDays(groups[a]));
+    cont.innerHTML=siteNames.map((site,idx)=>{
+        const items=groups[site].sort((a,b)=>(b.days||0)-(a.days||0));
+        const totalQty=items.reduce((a,e)=>a+e.qty,0);
+        const overdue=items.filter(e=>e.days!=null && e.days>=OVERDUE_DAYS).length;
+        const sid='ovs-'+idx;
+        const rows=items.map(e=>{
+            const od=e.days!=null && e.days>=OVERDUE_DAYS;
+            return `<tr${od?' style="background:rgba(220,38,38,0.05);"':''}><td style="font-weight:600;">${e.tool_name}<br><span style="font-family:monospace;font-size:0.7rem;color:var(--muted);">${e.tool_code}</span></td><td style="font-weight:600;">${e.user}</td><td style="text-align:center;">${e.qty}</td><td style="white-space:nowrap;font-size:0.8rem;color:var(--muted);">${e.lastBorrow?new Date(e.lastBorrow).toLocaleDateString('th-TH'):'-'}</td><td style="white-space:nowrap;font-weight:700;${od?'color:var(--danger);':''}">${e.days!=null?e.days+' วัน':'-'}${od?' <i data-lucide="alert-triangle" style="width:13px;vertical-align:-2px;"></i>':''}</td></tr>`;
+        }).join('');
+        const open=f?'style="display:block;"':'', chev=f?'transform:rotate(180deg);':'';
+        return `<div class="glass-panel accordion-header" style="border-left:4px solid var(--primary);margin-bottom:4px;" onclick="toggleEl('${sid}','${sid}c')"><span style="font-weight:700;"><i data-lucide="map-pin" style="width:15px;vertical-align:-3px;"></i> ${site} <span style="color:var(--muted);font-weight:500;">(${totalQty} ชิ้น)</span>${overdue?` <span class="badge-stock badge-out" style="font-size:0.7rem;">ค้างนาน ${overdue}</span>`:''}</span><i data-lucide="chevron-down" id="${sid}c" style="width:16px;transition:0.3s;${chev}"></i></div><div id="${sid}" class="accordion-body" ${open}><div class="glass-panel table-wrap"><table><thead><tr><th>เครื่องมือ</th><th>ผู้ถืออยู่</th><th style="text-align:center;">จำนวน</th><th>วันที่เบิก</th><th>ค้าง</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
     }).join('');
 }
 window.onOverviewSearch=v=>{ document.getElementById('overview-search-clear').style.display=v?'inline-flex':'none'; overviewSearch=normText(v); renderOverview(); if(window.lucide) lucide.createIcons(); };

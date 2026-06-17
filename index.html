@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0f172a">
-    <link rel="stylesheet" href="style.css?v=20260613l">
+    <link rel="stylesheet" href="style.css?v=20260613n">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -87,7 +87,7 @@
                 <input type="search" id="overview-search" placeholder="ค้นหารหัส / เครื่องมือ / คนถือ / ไซงาน..." autocomplete="off" oninput="onOverviewSearch(this.value)">
                 <button type="button" id="overview-search-clear" class="btn-outline btn-sm" onclick="clearOverviewSearch()" style="display:none;"><i data-lucide="x"></i></button>
             </div>
-            <div class="glass-panel table-wrap"><table><thead><tr><th>เครื่องมือ</th><th>ผู้ถืออยู่</th><th>ไซงาน</th><th style="text-align:center;">จำนวน</th><th>วันที่เบิก</th><th>ค้าง</th></tr></thead><tbody id="overview-body"></tbody></table></div>
+            <div id="overview-content"></div>
         </div>
 
         <!-- VIEW 3: จัดการ -->
@@ -229,6 +229,6 @@
         <div id="tool-location-list"></div>
     </div></div>
 
-    <script src="app.js?v=20260613l"></script>
+    <script src="app.js?v=20260613n"></script>
 </body>
 </html>
