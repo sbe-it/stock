@@ -11,7 +11,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0f172a">
-    <link rel="stylesheet" href="style.css?v=20260613k">
+    <link rel="stylesheet" href="style.css?v=20260613l">
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Noto+Sans+Thai:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -41,6 +41,7 @@
             <button class="nav-btn active" id="nav-inventory" onclick="switchView('inventory')"><span class="nav-icon"><i data-lucide="package"></i></span><span class="nav-text">คลังเครื่องมือ</span></button>
             <button class="nav-btn" id="nav-sites" onclick="switchView('sites')"><span class="nav-icon"><i data-lucide="map-pin"></i></span><span class="nav-text">ไซงาน</span></button>
             <button class="nav-btn" id="nav-repairs" onclick="switchView('repairs')"><span class="nav-icon-wrap"><span class="nav-icon"><i data-lucide="wrench"></i></span><span class="nav-badge" id="nav-repairs-count" style="display:none;"></span></span><span class="nav-text">งานซ่อม</span></button>
+            <button class="nav-btn" id="nav-overview" onclick="switchView('overview')"><span class="nav-icon"><i data-lucide="clipboard-list"></i></span><span class="nav-text">ภาพรวม</span></button>
             <button class="nav-btn" id="nav-mgmt" onclick="switchView('management')"><span class="nav-icon"><i data-lucide="settings"></i></span><span class="nav-text">จัดการ</span></button>
         </div>
         <div class="nav-user">
@@ -75,6 +76,18 @@
         <div id="view-sites" style="display:none;">
             <h2 class="section-title"><i data-lucide="map-pin"></i> สรุปเครื่องมือตามไซงาน</h2>
             <div id="sites-content"></div>
+        </div>
+
+        <!-- VIEW: ภาพรวม (แอดมิน) -->
+        <div id="view-overview" style="display:none;">
+            <div class="mgmt-header"><h2 class="section-title"><i data-lucide="clipboard-list"></i> ของที่เบิกออกอยู่ตอนนี้</h2><button class="btn-primary btn-sm" onclick="exportBorrowedCSV()"><i data-lucide="download" style="width:14px;vertical-align:-2px;"></i> ส่งออก CSV</button></div>
+            <div class="stats-grid" id="overview-summary"></div>
+            <div class="search-bar" style="margin:1rem 0 0.75rem;">
+                <i data-lucide="search" class="search-icon"></i>
+                <input type="search" id="overview-search" placeholder="ค้นหารหัส / เครื่องมือ / คนถือ / ไซงาน..." autocomplete="off" oninput="onOverviewSearch(this.value)">
+                <button type="button" id="overview-search-clear" class="btn-outline btn-sm" onclick="clearOverviewSearch()" style="display:none;"><i data-lucide="x"></i></button>
+            </div>
+            <div class="glass-panel table-wrap"><table><thead><tr><th>เครื่องมือ</th><th>ผู้ถืออยู่</th><th>ไซงาน</th><th style="text-align:center;">จำนวน</th><th>วันที่เบิก</th><th>ค้าง</th></tr></thead><tbody id="overview-body"></tbody></table></div>
         </div>
 
         <!-- VIEW 3: จัดการ -->
@@ -216,6 +229,6 @@
         <div id="tool-location-list"></div>
     </div></div>
 
-    <script src="app.js?v=20260613k"></script>
+    <script src="app.js?v=20260613l"></script>
 </body>
 </html>

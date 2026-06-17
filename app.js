@@ -168,6 +168,7 @@ function render() {
     updateRepairsNavBadge();
     if(currentView==='inventory') renderInventory();
     else if(currentView==='sites') renderSites();
+    else if(currentView==='overview') renderOverview();
     else renderMgmt();
     if(window.lucide) lucide.createIcons();
 }
@@ -178,11 +179,11 @@ function updateRepairsNavBadge(){
 }
 
 // ===== VIEW SWITCHING =====
-const viewNavMap = {inventory:'nav-inventory', sites:'nav-sites', management:'nav-mgmt', repairs:'nav-repairs'};
+const viewNavMap = {inventory:'nav-inventory', sites:'nav-sites', overview:'nav-overview', management:'nav-mgmt', repairs:'nav-repairs'};
 window.switchView = v => {
-    if((v==='management'||v==='repairs') && !isAdmin()) v='inventory';
+    if((v==='management'||v==='repairs'||v==='overview') && !isAdmin()) v='inventory';
     currentView=v;
-    ['inventory','sites','management','repairs'].forEach(id=>{
+    ['inventory','sites','overview','management','repairs'].forEach(id=>{
         document.getElementById('view-'+id).style.display=id===v?'block':'none';
         document.getElementById(viewNavMap[id]).classList.toggle('active',id===v);
     });
@@ -351,6 +352,58 @@ function renderMgmt() {
         }).join('');
     }
 }
+
+// ===== ภาพรวมแอดมิน: ของที่เบิกออกอยู่ตอนนี้ + ค้างกี่วัน + ส่งออก CSV =====
+const OVERDUE_DAYS=7; // เกินกี่วันถือว่า "ค้างนาน"
+let overviewSearch='';
+// คำนวณรายการที่ยังเบิกค้างอยู่ ต่อ (เครื่องมือ, ไซ, ผู้ถือ) พร้อมวันที่เบิกล่าสุด
+function computeOutstanding(){
+    const map={};
+    const logs=[...allLogs].sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp)); // เก่า->ใหม่
+    for(const l of logs){
+        const site=l.site_name||'ไม่ระบุ';
+        const key=l.tool_id+'|'+site+'|'+l.user_name;
+        let e=map[key]; if(!e){ e=map[key]={tool_id:l.tool_id, tool_name:l.tool_name, department:l.department, site, user:l.user_name, qty:0, lastBorrow:null}; }
+        if(l.type==='BORROW'){ e.qty+=l.quantity; e.lastBorrow=l.timestamp; }
+        else { e.qty-=l.quantity; }
+    }
+    const codeById={}; tools.forEach(t=>codeById[t.id]=t.tool_code);
+    const now=Date.now();
+    return Object.values(map).filter(e=>e.qty>0).map(e=>({
+        ...e, tool_code:codeById[e.tool_id]||'-',
+        days: e.lastBorrow? Math.floor((now-new Date(e.lastBorrow).getTime())/86400000) : null
+    })).sort((a,b)=>(b.days||0)-(a.days||0));
+}
+function renderOverview(){
+    const list=computeOutstanding();
+    const f=overviewSearch;
+    const filtered=f? list.filter(e=>normText(e.tool_code).includes(f)||normText(e.tool_name).includes(f)||normText(e.user).includes(f)||normText(e.site).includes(f)) : list;
+    const totalOut=list.reduce((a,e)=>a+e.qty,0);
+    const overdueCount=list.filter(e=>e.days!=null && e.days>=OVERDUE_DAYS).length;
+    const sum=document.getElementById('overview-summary');
+    if(sum) sum.innerHTML=
+        `<div class="glass-panel stat-card"><div class="stat-icon stat-icon-orange"><i data-lucide="arrow-up-right"></i></div><div class="stat-label">เบิกออกอยู่ (ชิ้น)</div><div class="stat-value orange">${totalOut}</div></div>`
+        +`<div class="glass-panel stat-card"><div class="stat-icon stat-icon-blue"><i data-lucide="users"></i></div><div class="stat-label">รายการที่ถืออยู่</div><div class="stat-value">${list.length}</div></div>`
+        +`<div class="glass-panel stat-card"><div class="stat-icon" style="background:rgba(220,38,38,0.1);color:var(--danger);"><i data-lucide="alarm-clock"></i></div><div class="stat-label">ค้างเกิน ${OVERDUE_DAYS} วัน</div><div class="stat-value" style="color:var(--danger);">${overdueCount}</div></div>`;
+    const tb=document.getElementById('overview-body'); if(!tb) return;
+    if(!filtered.length){ tb.innerHTML=`<tr><td colspan="6" style="text-align:center;color:var(--muted);padding:1.5rem;">${f?'ไม่พบรายการที่ตรงกับคำค้น':'ตอนนี้ไม่มีของที่เบิกออก ทุกชิ้นอยู่ในคลัง'}</td></tr>`; return; }
+    tb.innerHTML=filtered.map(e=>{
+        const od=e.days!=null && e.days>=OVERDUE_DAYS;
+        return `<tr${od?' style="background:rgba(220,38,38,0.05);"':''}><td style="font-weight:600;">${e.tool_name}<br><span style="font-family:monospace;font-size:0.7rem;color:var(--muted);">${e.tool_code}</span></td><td style="font-weight:600;">${e.user}</td><td>${e.site}</td><td style="text-align:center;">${e.qty}</td><td style="white-space:nowrap;font-size:0.8rem;color:var(--muted);">${e.lastBorrow?new Date(e.lastBorrow).toLocaleDateString('th-TH'):'-'}</td><td style="white-space:nowrap;font-weight:700;${od?'color:var(--danger);':''}">${e.days!=null?e.days+' วัน':'-'}${od?' <i data-lucide="alert-triangle" style="width:13px;vertical-align:-2px;"></i>':''}</td></tr>`;
+    }).join('');
+}
+window.onOverviewSearch=v=>{ document.getElementById('overview-search-clear').style.display=v?'inline-flex':'none'; overviewSearch=normText(v); renderOverview(); if(window.lucide) lucide.createIcons(); };
+window.clearOverviewSearch=()=>{ const i=document.getElementById('overview-search'); i.value=''; overviewSearch=''; document.getElementById('overview-search-clear').style.display='none'; renderOverview(); if(window.lucide) lucide.createIcons(); i.focus(); };
+window.exportBorrowedCSV=()=>{
+    const list=computeOutstanding();
+    const rows=[['รหัส','เครื่องมือ','แผนก','ผู้ถือ','ไซงาน','จำนวน','วันที่เบิก','ค้าง(วัน)']];
+    list.forEach(e=>rows.push([e.tool_code,e.tool_name,e.department,e.user,e.site,e.qty, e.lastBorrow?new Date(e.lastBorrow).toLocaleString('th-TH'):'', e.days==null?'':e.days]));
+    const csv='﻿'+rows.map(r=>r.map(c=>`"${String(c).replace(/"/g,'""')}"`).join(',')).join('\r\n');
+    const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+    const url=URL.createObjectURL(blob); const a=document.createElement('a');
+    a.href=url; a.download=`ของที่เบิกออก-${new Date().toISOString().slice(0,10)}.csv`; document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+};
 
 // ===== บีบอัด/ย่อรูปก่อนอัปโหลด (ลด Egress / Storage ให้อยู่ในโควต้าฟรี) =====
 // ย่อให้ด้านยาวสุดไม่เกิน maxDim px แล้วบีบเป็น webp/jpeg คุณภาพ ~0.72

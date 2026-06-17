@@ -204,4 +204,5 @@ textarea { resize:vertical; min-height:5rem; }
 /* ===== ROLE: USER (ดูอย่างเดียว) ===== */
 body.role-user #nav-mgmt,
 body.role-user #nav-repairs,
+body.role-user #nav-overview,
 body.role-user .tool-actions { display:none !important; }
