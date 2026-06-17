@@ -84,8 +84,24 @@ function autoRefreshOnReturn(){
     lastAutoRefresh=now;
     refreshData();
 }
-document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible') autoRefreshOnReturn(); });
-window.addEventListener('focus', autoRefreshOnReturn);
+document.addEventListener('visibilitychange', ()=>{ if(document.visibilityState==='visible'){ autoRefreshOnReturn(); checkForUpdate(); } });
+window.addEventListener('focus', ()=>{ autoRefreshOnReturn(); checkForUpdate(); });
+
+// ===== บังคับโหลดเวอร์ชันใหม่อัตโนมัติ (กันมือถือค้าง cache เก่า) =====
+// อ่านเลขเวอร์ชันจาก ?v= ของ app.js ที่กำลังรันอยู่ (ไม่ต้อง hardcode)
+const APP_VERSION=(()=>{ const s=[...document.scripts].find(x=>x.src&&x.src.includes('app.js')); const m=s&&s.src.match(/v=([a-zA-Z0-9]+)/); return m?m[1]:''; })();
+let checkingUpdate=false, lastUpdateCheck=0, updating=false;
+async function checkForUpdate(){
+    if(updating || checkingUpdate || !APP_VERSION) return;
+    const now=Date.now(); if(now-lastUpdateCheck < 15000) return; // เช็คทุก 15 วินาทีอย่างมาก
+    lastUpdateCheck=now; checkingUpdate=true;
+    try{
+        const html=await (await fetch('./index.html?_='+now, {cache:'no-store'})).text();
+        const m=html.match(/app\.js\?v=([a-zA-Z0-9]+)/);
+        if(m && m[1] && m[1]!==APP_VERSION){ updating=true; location.reload(); }
+    }catch(e){ /* ออฟไลน์/เน็ตล่ม ข้ามไปเงียบ ๆ */ }
+    finally{ checkingUpdate=false; }
+}
 
 let refreshing=false, refreshQueued=false;
 async function refreshData() {
