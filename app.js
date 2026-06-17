@@ -255,7 +255,7 @@ function renderInventory() {
             const oos=tool.available_stock<=0, locs=getToolLocations(tool.id);
             const repairing=tool.status==='repairing', retired=tool.status==='retired';
             let locHtml='';
-            if(locs.length) locHtml='<div class="card-badges">'+locs.map(l=>`<span class="badge badge-site"><i data-lucide="map-pin"></i> ${l.name} (${l.qty})</span><span class="badge badge-user"><i data-lucide="user"></i> ${l.users.join(', ')}</span>`).join('')+'</div>';
+            if(locs.length) locHtml='<div class="card-badges">'+locs.map(l=>`<span class="badge badge-site"><i data-lucide="map-pin"></i> ${l.name}</span><span class="badge badge-user"><i data-lucide="user"></i> ${l.users.join(', ')}</span>`).join('')+'</div>';
             const card=document.createElement('div'); card.className='glass-panel tool-card'+(repairing?' tool-card-repairing':'')+(retired?' tool-card-retired':'');
             const stockBadge=retired?`<span class="badge-stock badge-retired"><i data-lucide="ban"></i> ปลดระวาง</span>`:repairing?`<span class="badge-stock badge-repair"><i data-lucide="wrench"></i> กำลังซ่อม</span>`:`<span class="badge-stock ${oos?'badge-out':'badge-ok'}">${oos?'เบิกหมด':'คงเหลือ '+tool.available_stock}</span>`;
             const borrowBtn=retired?`<button class="btn-primary" disabled title="เครื่องมือถูกปลดระวาง">ปลดระวาง</button>`:repairing?`<button class="btn-primary" disabled title="กำลังซ่อมอยู่ เบิกไม่ได้">ซ่อมอยู่</button>`:`<button class="btn-primary" onclick="openActionModal(${tool.id},'BORROW')" ${oos?'disabled':''}>เบิก</button>`;
