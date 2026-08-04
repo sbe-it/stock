@@ -382,23 +382,27 @@ function renderMgmt() {
 // ===== ภาพรวมแอดมิน: ของที่เบิกออกอยู่ตอนนี้ + ค้างกี่วัน + ส่งออก CSV =====
 const OVERDUE_DAYS=7; // เกินกี่วันถือว่า "ค้างนาน"
 let overviewSearch='';
-// คำนวณรายการที่ยังเบิกค้างอยู่ ต่อ (เครื่องมือ, ไซ, ผู้ถือ) พร้อมวันที่เบิกล่าสุด
+// คำนวณรายการที่ยังเบิกค้างอยู่ ต่อ (เครื่องมือ, ไซ) พร้อมวันที่เบิกล่าสุด
+// หมายเหตุ: หักลบต่อ "ไซ" ไม่ผูกกับชื่อคน เพื่อให้การคืนหักล้างการเบิกได้เสมอ
+// (เดิมผูก key กับ user_name ทำให้ถ้าชื่อผู้คืน != ชื่อผู้เบิก เครื่องมือจะไม่เด้งออกจากลิสต์)
 function computeOutstanding(){
     const map={};
     const logs=[...allLogs].sort((a,b)=>new Date(a.timestamp)-new Date(b.timestamp)); // เก่า->ใหม่
     for(const l of logs){
         const site=(l.site_name && l.site_name!=='-')?l.site_name:'ส่วนกลาง / ไม่ระบุไซ';
-        const key=l.tool_id+'|'+site+'|'+l.user_name;
-        let e=map[key]; if(!e){ e=map[key]={tool_id:l.tool_id, tool_name:l.tool_name, department:l.department, site, user:l.user_name, qty:0, lastBorrow:null}; }
-        if(l.type==='BORROW'){ e.qty+=l.quantity; e.lastBorrow=l.timestamp; }
-        else { e.qty-=l.quantity; }
+        const key=l.tool_id+'|'+site;
+        let e=map[key]; if(!e){ e=map[key]={tool_id:l.tool_id, tool_name:l.tool_name, department:l.department, site, qty:0, lastBorrow:null, userBal:{}}; }
+        const u=(l.user_name||'').normalize('NFC').trim(); // normalize กันช่องว่าง/พิมพ์เล็กใหญ่ไม่ตรง
+        if(l.type==='BORROW'){ e.qty+=l.quantity; e.lastBorrow=l.timestamp; e.userBal[u]=(e.userBal[u]||0)+l.quantity; }
+        else { e.qty-=l.quantity; e.userBal[u]=(e.userBal[u]||0)-l.quantity; }
     }
     const codeById={}; tools.forEach(t=>codeById[t.id]=t.tool_code);
     const now=Date.now();
-    return Object.values(map).filter(e=>e.qty>0).map(e=>({
-        ...e, tool_code:codeById[e.tool_id]||'-',
-        days: e.lastBorrow? Math.floor((now-new Date(e.lastBorrow).getTime())/86400000) : null
-    })).sort((a,b)=>(b.days||0)-(a.days||0));
+    return Object.values(map).filter(e=>e.qty>0).map(e=>{
+        const holders=Object.keys(e.userBal).filter(u=>e.userBal[u]>0 && u); // แสดงเฉพาะคนที่ยังถือค้างจริง
+        return { ...e, user:holders.join(', ')||'-', tool_code:codeById[e.tool_id]||'-',
+            days: e.lastBorrow? Math.floor((now-new Date(e.lastBorrow).getTime())/86400000) : null };
+    }).sort((a,b)=>(b.days||0)-(a.days||0));
 }
 function renderOverview(){
     const list=computeOutstanding();
