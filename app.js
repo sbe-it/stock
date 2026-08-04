@@ -135,8 +135,24 @@ async function fetchTools(){
     tools=list.sort((a,b)=>(a.tool_code||'').localeCompare(b.tool_code||'','th',{numeric:true}));
 }
 async function fetchLogs(){
-    const{data}=await _supabase.from('transactions').select('*, tools(name,department), sites(name)').order('timestamp',{ascending:false}).limit(500);
-    allLogs=data?data.map(l=>({...l, tool_name:l.tools?l.tools.name:'?', department:l.tools?l.tools.department:'-', site_name:l.sites?l.sites.name:'-'})):[];
+    // ดึงประวัติทั้งหมดแบบแบ่งหน้า (Supabase จำกัดสูงสุด ~1000 แถว/คำขอ)
+    // ต้องได้ครบทุกแถว ไม่งั้นยอดเบิกค้าง/ยอดต่อไซจะเพี้ยนเมื่อประวัติเยอะ
+    // เรียงด้วย id เป็น tiebreaker ให้แบ่งหน้าเสถียร (กันแถวหาย/ซ้ำที่ขอบหน้า)
+    const PAGE=1000, MAX_PAGES=100; // เพดานกันลูปไม่รู้จบ (รองรับสูงสุด 100,000 แถว)
+    let all=[];
+    for(let p=0; p<MAX_PAGES; p++){
+        const from=p*PAGE;
+        const{data,error}=await _supabase.from('transactions')
+            .select('*, tools(name,department), sites(name)')
+            .order('timestamp',{ascending:false}).order('id',{ascending:false})
+            .range(from, from+PAGE-1);
+        if(error){ console.error('โหลดประวัติไม่สำเร็จ:', error); break; }
+        if(!data || !data.length) break;
+        all=all.concat(data);
+        if(data.length<PAGE) break; // หน้าสุดท้าย
+    }
+    if(all.length>=MAX_PAGES*PAGE) console.warn('ประวัติแตะเพดาน', MAX_PAGES*PAGE, 'แถว — ควรย้ายไปคำนวณยอดค้างฝั่งฐานข้อมูล');
+    allLogs=all.map(l=>({...l, tool_name:l.tools?l.tools.name:'?', department:l.tools?l.tools.department:'-', site_name:l.sites?l.sites.name:'-'}));
 }
 async function fetchRepairs(){
     const{data,error}=await _supabase.from('repairs').select('*, tools(name,tool_code,department)').order('created_at',{ascending:false});
