@@ -170,7 +170,7 @@ function buildToolLocations(){
         const tid=l.tool_id; let g=m[tid]; if(!g){ g=m[tid]={}; }
         const k=l.site_id||'none', n=l.site_name||'ไม่ระบุ';
         // userBal: นับยอดค้างต่อคน (เบิก +, คืน -) จะได้แสดงเฉพาะคนที่ยังถือของจริง
-        let s=g[k]; if(!s){ s=g[k]={name:n, qty:0, userBal:{}}; }
+        let s=g[k]; if(!s){ s=g[k]={name:n, qty:0, userBal:{}, site_id:(l.site_id||null)}; }
         if(l.type==='BORROW'){ s.qty+=l.quantity; s.userBal[l.user_name]=(s.userBal[l.user_name]||0)+l.quantity; }
         else{ s.qty-=l.quantity; s.userBal[l.user_name]=(s.userBal[l.user_name]||0)-l.quantity; }
     }
@@ -183,7 +183,7 @@ function getToolLocations(toolId) {
     return Object.values(g).filter(s=>s.qty>0).map(s=>{
         let users=Object.keys(s.userBal).filter(u=>s.userBal[u]>0);
         if(!users.length) users=Object.keys(s.userBal).filter(u=>s.userBal[u]>=0);
-        return {name:s.name, qty:s.qty, users};
+        return {name:s.name, qty:s.qty, users, site_id:s.site_id};
     });
 }
 
@@ -684,13 +684,23 @@ window.openActionModal=(id,type)=>{
         sg.style.display='block'; sl.textContent='ไซงานที่จะส่งไป';
         ss.innerHTML='<option value="">-- เลือกไซงาน --</option>'; sites.forEach(s=>ss.innerHTML+=`<option value="${s.id}">${s.name}</option>`);
     } else {
-        // คืน: ต้องบอกว่าคืนมาจากไซไหน เพื่อให้หักจำนวนออกจากไซนั้นถูกต้อง
-        // แสดงเฉพาะไซที่เครื่องมือนี้ยังออกไปอยู่จริง
-        const locs=getToolLocations(id).filter(l=>l.name!=='ไม่ระบุ');
+        // คืน: แสดงเฉพาะไซที่เครื่องมือนี้ยังเบิกค้างอยู่จริง เพื่อกันการคืนผิดไซ (ต้นเหตุ "ผี")
+        // ถ้าค้างที่เดียว เลือกให้อัตโนมัติ; โชว์ "ส่วนกลาง" เฉพาะเมื่อมีของค้างที่ส่วนกลางจริง
         sg.style.display='block'; sl.textContent='ไซงานที่คืนมาจาก';
-        ss.innerHTML='<option value="">-- เลือกไซงาน --</option>';
-        locs.forEach(l=>{ const s=sites.find(x=>x.name===l.name); if(s) ss.innerHTML+=`<option value="${s.id}">${s.name} (เบิกไป ${l.qty})</option>`; });
-        ss.innerHTML+='<option value="__central">คืนจากส่วนกลาง / ไม่ระบุไซ</option>';
+        const locs=getToolLocations(id).filter(l=>l.qty>0);
+        const realLocs=locs.filter(l=>l.site_id!=null);
+        const centralQty=locs.filter(l=>l.site_id==null).reduce((a,l)=>a+l.qty,0);
+        let opts=realLocs.map(l=>`<option value="${l.site_id}">${l.name} (เบิกไป ${l.qty})</option>`).join('');
+        if(centralQty>0) opts+=`<option value="__central">ส่วนกลาง / ไม่ระบุไซ (เบิกไป ${centralQty})</option>`;
+        const nOpt=realLocs.length+(centralQty>0?1:0);
+        if(nOpt===0){
+            // ไม่มีข้อมูลว่าค้างอยู่ไซไหน (ข้อมูลเก่าอาจคลาดเคลื่อน) — ให้เลือกได้ทั้งหมดเป็น fallback
+            ss.innerHTML='<option value="">-- เลือกไซงาน --</option>'+sites.map(s=>`<option value="${s.id}">${s.name}</option>`).join('')+'<option value="__central">ส่วนกลาง / ไม่ระบุไซ</option>';
+        } else if(nOpt===1){
+            ss.innerHTML=opts; // ค้างอยู่ที่เดียว เลือกให้อัตโนมัติ กันเลือกผิด
+        } else {
+            ss.innerHTML='<option value="">-- เลือกไซงาน --</option>'+opts;
+        }
     }
     // จำกัดจำนวนสูงสุดที่เบิกได้ = ของที่เหลือจริง (กันการพิมพ์เกิน)
     const qtyInput=document.getElementById('quantity');
@@ -709,7 +719,7 @@ document.getElementById('action-form').addEventListener('submit',async e=>{
     if(!Number.isInteger(qty)||qty<1) return alert('จำนวนไม่ถูกต้อง');
     if(type==='RETURN' && !siteRaw) return alert('กรุณาเลือกว่าคืนมาจากไซงานไหน');
     // คืนจากไซที่ระบุ: จำนวนคืนต้องไม่เกินที่เบิกออกไปจากไซนั้น
-    if(type==='RETURN' && siteId){ const loc=getToolLocations(id).find(l=>{const s=sites.find(x=>x.name===l.name);return s&&String(s.id)===String(siteId);}); if(loc&&qty>loc.qty) return alert(`ไซนี้เบิกไปแค่ ${loc.qty} ชิ้น คืนเกินไม่ได้`); }
+    if(type==='RETURN' && siteId){ const loc=getToolLocations(id).find(l=>String(l.site_id)===String(siteId)); if(loc&&qty>loc.qty) return alert(`ไซนี้เบิกไปแค่ ${loc.qty} ชิ้น คืนเกินไม่ได้`); }
     const submitBtn=e.submitter||document.querySelector('#action-form button[type="submit"]');
     actionSubmitting=true; if(submitBtn) submitBtn.disabled=true;
     try{
